@@ -120,7 +120,10 @@ export const ptBR: Record<string, string> = {
   "PNG, JPG or WebP, up to 5 MB. Shown at 128 px.": "PNG, JPG ou WebP, até 5 MB. Exibida em 128 px.",
   "Paste the whole invite (address#CODE) and the code fills in by itself.": "Cole o convite inteiro (endereço#CÓDIGO) e o código é preenchido sozinho.",
   "Play a test sound": "Tocar um som de teste",
-  "Port 4646 is already in use.": "A porta 4646 já está em uso.",
+  "Port 4646 is already in use. Close the other app (or another Talkas window) that's using it.":
+    "A porta 4646 já está em uso. Feche o outro app (ou outra janela do Talkas) que está usando ela.",
+  "Talkas was updated while it was open. Close it completely and start it again.": "O Talkas foi atualizado enquanto estava aberto. Feche ele por completo e abra de novo.",
+  "Couldn't start the server: {reason}": "Não foi possível iniciar o servidor: {reason}",
   "Pre-selected when you Go Live.": "Já vem selecionada quando você transmitir.",
   Profile: "Perfil",
   "Profile picture": "Foto de perfil",

@@ -93,8 +93,8 @@ export function ConnectModal({
     try {
       profile();
       const srv = await servers.create(serverName.trim() || t("My Server"));
+      onCreated(srv.id); // the server exists even if going live fails below
       if (goLive) await servers.goLive(srv.id);
-      onCreated(srv.id);
       onClose();
     } catch (e) {
       setErr(servers.errorText(e));

@@ -53,8 +53,13 @@ export const servers = {
     void native?.host.stop();
     set({ host: null });
   },
+  /** User-facing reason, never a bare "something failed". */
   errorText(e: unknown) {
-    return String((e as Error)?.message ?? e).includes("EADDRINUSE") ? t("Port 4646 is already in use.") : t("Couldn't start the server.");
+    const raw = String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+    if (raw.includes("EADDRINUSE")) return t("Port 4646 is already in use. Close the other app (or another Talkas window) that's using it.");
+    if (raw.includes("No handler registered") || raw.includes("reading 'create'") || raw.includes("reading 'start'") || !native?.servers)
+      return t("Talkas was updated while it was open. Close it completely and start it again.");
+    return t("Couldn't start the server: {reason}", { reason: raw });
   },
 };
 
