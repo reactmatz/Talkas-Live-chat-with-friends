@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { DEFAULT_PORT, NO_MEDIA, type ChatMessage, type MediaState, type Member, type Profile, type ServerInfo } from "../../shared/protocol";
 import { PeerMesh, type ScreenPreset, type Slot } from "./mesh";
 import { native } from "./native";
+import { t } from "./i18n";
 import { settings } from "./settings";
 import { sounds } from "./sounds";
 import { SignalingClient, type SocketStatus } from "./signaling";
@@ -84,7 +85,7 @@ class Session {
     try {
       url = SignalingClient.normalize(o.address, DEFAULT_PORT);
     } catch {
-      this.set({ error: "That address doesn't look right. Use something like 192.168.0.10:4646." });
+      this.set({ error: t("That address doesn't look right. Use something like 192.168.0.10:4646.") });
       return;
     }
     const client = new SignalingClient(url, { t: "hello", key: o.key, hostToken: o.hostToken, ...o.profile });
@@ -122,6 +123,12 @@ class Session {
           const { [m.id]: _media, ...remote } = this.state.remote;
           this.speakingMonitor.remove(m.id);
           this.set({ members, remote });
+          return;
+        }
+        case "server_update": {
+          this.set({ server: m.server });
+          // our voice room was deleted: hang up
+          if (this.state.voiceChannel && !m.server.channels.some((c) => c.id === this.state.voiceChannel)) this.leaveVoice();
           return;
         }
         case "member_profile":
@@ -188,7 +195,7 @@ class Session {
       try {
         next = await navigator.mediaDevices.getUserMedia({ audio: { ...audio, deviceId: undefined } }); // device unplugged
       } catch {
-        this.set({ error: "Microphone blocked or not found. You joined listen-only." });
+        this.set({ error: t("Microphone blocked or not found. You joined listen-only.") });
       }
     }
     const old = this.mic;
@@ -258,7 +265,7 @@ class Session {
       this.set({ localCamera: cam });
       this.setLocal({ camera: true });
     } catch {
-      this.set({ error: "Camera blocked or not found." });
+      this.set({ error: t("Camera blocked or not found.") });
     }
   }
 
@@ -279,7 +286,7 @@ class Session {
       this.set({ localScreen: stream });
       this.setLocal({ sharing: true });
     } catch (e) {
-      if ((e as DOMException)?.name !== "NotAllowedError") this.set({ error: "Couldn't start screen sharing." });
+      if ((e as DOMException)?.name !== "NotAllowedError") this.set({ error: t("Couldn't start screen sharing.") });
     }
   }
 

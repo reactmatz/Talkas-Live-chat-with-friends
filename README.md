@@ -23,10 +23,13 @@ npm run dist     # installer for the current OS (electron-builder) → release/
 git tag v0.1.1 && git push origin v0.1.1
 ```
 
-1. One friend clicks **Host a server** → gets an **invite code** (user-plus icon next to the server name).
-2. Others click **Join a friend** → host's address (`192.168.x.x:4646` on the same Wi-Fi) + invite code.
-3. Click a voice channel to join. **Screen** → pick a screen/window, quality and system audio → **Go Live**.
-4. Click a live stream to watch it fullscreen. The cursor and controls hide after 3 s; move the mouse to
+1. **Create a server**: it's saved on your PC. Add, rename (right-click) or delete text and voice channels
+   while it's offline — only you can see it.
+2. **Go live** when you want to host it. Invite friends with the user-plus icon next to the server name.
+   Chat history is kept between sessions; channel edits reach everyone instantly while live.
+3. Friends click **Join a friend** and paste the invite.
+4. Click a voice channel to join. **Screen** → pick a screen/window, quality and system audio → **Go Live**.
+5. Click a live stream to watch it fullscreen. The cursor and controls hide after 3 s; move the mouse to
    bring them back. `F` toggles fullscreen.
 
 ### Over the internet (Cloudflare link)
@@ -39,6 +42,8 @@ No account, no router setup, and friends never see your IP during the handshake.
 time you start hosting. Voice and video still connect peer to peer.
 
 Same Wi-Fi: share the LAN invite (`192.168.x.x:4646#CODE`) instead.
+
+Language: Settings → Language → English or Português (Brasil).
 
 ## Architecture
 

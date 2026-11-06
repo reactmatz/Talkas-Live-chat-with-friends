@@ -2,6 +2,7 @@ import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell } from "el
 import { join } from "node:path";
 import { DEFAULT_PORT } from "../shared/protocol";
 import { checkPublicAddress, QuickTunnel } from "./cloudflare";
+import { ServerStore } from "./servers";
 import { SignalingServer } from "./signaling";
 
 const DEV_URL = "http://localhost:5180";
@@ -70,13 +71,33 @@ function setupPermissions() {
 }
 
 function setupIpc() {
-  ipcMain.handle("host:start", async (_e, args: { name?: string; port?: number }) =>
-    signaling.start({
-      name: String(args?.name || "My Server").slice(0, 40),
-      port: Number(args?.port) || DEFAULT_PORT,
-      dataDir: join(app.getPath("userData"), "host"),
-    }),
-  );
+  const servers = new ServerStore(join(app.getPath("userData"), "servers.json"));
+  ipcMain.handle("servers:list", () => servers.list());
+  ipcMain.handle("servers:create", (_e, name: string) => servers.create(String(name ?? "")));
+  ipcMain.handle("servers:update", (_e, id: string, patch: { name?: string; channels?: unknown }) => {
+    const saved = servers.update(String(id), { name: patch?.name, channels: patch?.channels as never });
+    signaling.updateServer(saved); // pushes the change to everyone if this server is live
+    return saved;
+  });
+  ipcMain.handle("servers:delete", async (_e, id: string) => {
+    if (signaling.getInfo().serverId === id) {
+      tunnel.stop();
+      await signaling.stop();
+    }
+    servers.delete(String(id));
+  });
+
+  // "Go live": host one of your saved servers from this PC.
+  ipcMain.handle("host:start", async (_e, serverId: string, port?: number) => {
+    const saved = servers.get(String(serverId));
+    if (!saved) throw new Error("Server not found.");
+    tunnel.stop(); // a new session gets a new internet link
+    return signaling.start({
+      server: saved,
+      port: Number(port) || DEFAULT_PORT,
+      dataDir: join(app.getPath("userData"), "host", saved.id),
+    });
+  });
   ipcMain.handle("host:stop", () => {
     tunnel.stop();
     return signaling.stop();

@@ -1,4 +1,5 @@
 import { Hash, SendHorizontal } from "lucide-react";
+import { t } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import type { Channel, ChatMessage } from "../../shared/protocol";
 import { session, useSession } from "../lib/session";
@@ -27,8 +28,8 @@ export function TextChannel({ channel }: { channel: Channel }) {
             <div className="flex size-16 items-center justify-center rounded-full bg-elevated">
               <Hash size={34} />
             </div>
-            <h2 className="text-2xl font-bold">Welcome to #{channel.name}!</h2>
-            <p className="text-sm text-fg2">This is the start of the channel. Messages are kept on the host's PC.</p>
+            <h2 className="text-2xl font-bold">{t("Welcome to #{name}!", { name: channel.name })}</h2>
+            <p className="text-sm text-fg2">{t("This is the start of the channel. Messages are kept on the host's PC.")}</p>
           </div>
         )}
         {messages.map((m, i) => (
@@ -45,8 +46,8 @@ export function TextChannel({ channel }: { channel: Channel }) {
         }}
       >
         <div className="flex items-center gap-2 rounded-lg bg-hover px-4">
-          <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={`Message #${channel.name}`} maxLength={2000} className="h-11 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted" />
-          <button type="submit" disabled={!draft.trim()} className="text-fg2 hover:text-fg disabled:opacity-30" aria-label="Send">
+          <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t("Message #{name}", { name: channel.name })} maxLength={2000} className="h-11 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted" />
+          <button type="submit" disabled={!draft.trim()} className="text-fg2 hover:text-fg disabled:opacity-30" aria-label={t("Send")}>
             <SendHorizontal size={18} />
           </button>
         </div>

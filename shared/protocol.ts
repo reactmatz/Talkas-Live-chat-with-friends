@@ -13,6 +13,7 @@ export interface Channel {
 }
 
 export interface ServerInfo {
+  id: string;
   name: string;
   channels: Channel[];
 }
@@ -77,6 +78,7 @@ export type ServerMessage =
   | { t: "member_leave"; id: string }
   | { t: "member_state"; id: string; state: MediaState }
   | { t: "member_profile"; member: Member }
+  | { t: "server_update"; server: ServerInfo }
   | { t: "voice"; voice: Record<string, string[]> }
   | { t: "signal"; from: string; data: SignalData }
   | { t: "chat"; message: ChatMessage }

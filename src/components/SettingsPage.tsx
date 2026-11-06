@@ -1,4 +1,5 @@
-import { Bell, Check, Cpu, ImagePlus, Mic, Palette, Search, UserCircle, X, type LucideIcon } from "lucide-react";
+import { Bell, Check, Cpu, ImagePlus, Languages, Mic, Palette, Search, UserCircle, X, type LucideIcon } from "lucide-react";
+import { t } from "../lib/i18n";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MAX_BIO_LENGTH, type Profile } from "../../shared/protocol";
 import { SCREEN_PRESETS } from "../lib/mesh";
@@ -7,12 +8,13 @@ import { settings, useSettings } from "../lib/settings";
 import { sounds } from "../lib/sounds";
 import { Avatar, Button, cx } from "./ui";
 
-type SectionId = "profile" | "voice" | "sounds" | "appearance" | "advanced";
+type SectionId = "profile" | "voice" | "sounds" | "appearance" | "language" | "advanced";
 const SECTIONS: { id: SectionId; group: string; label: string; icon: LucideIcon; keywords: string }[] = [
   { id: "profile", group: "User Settings", label: "Profile", icon: UserCircle, keywords: "name avatar picture bio about banner color" },
   { id: "voice", group: "App Settings", label: "Voice & Video", icon: Mic, keywords: "microphone input output speaker headset camera noise echo gain stream quality test" },
   { id: "sounds", group: "App Settings", label: "Sounds", icon: Bell, keywords: "join leave mute message notification" },
   { id: "appearance", group: "App Settings", label: "Appearance", icon: Palette, keywords: "zoom scale compact chat density video participants" },
+  { id: "language", group: "App Settings", label: "Language", icon: Languages, keywords: "idioma lingua língua portuguese português english inglês" },
   { id: "advanced", group: "App Settings", label: "Advanced", icon: Cpu, keywords: "stun internet nat reset version" },
 ];
 
@@ -26,7 +28,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", esc);
   }, [onClose]);
 
-  const visible = SECTIONS.filter((s) => !query.trim() || `${s.label} ${s.keywords}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const visible = SECTIONS.filter((s) => !query.trim() || `${s.label} ${t(s.label)} ${s.keywords}`.toLowerCase().includes(query.trim().toLowerCase()));
   const current = SECTIONS.find((s) => s.id === section)!;
 
   return (
@@ -34,33 +36,33 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
       <nav className="flex w-[260px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-panel px-3 py-4">
         <div className="mb-2 flex items-center gap-2 rounded-md border border-line bg-canvas px-2.5">
           <Search size={16} className="text-muted" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" className="h-9 flex-1 bg-transparent text-sm outline-none placeholder:text-muted" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search")} className="h-9 flex-1 bg-transparent text-sm outline-none placeholder:text-muted" />
         </div>
         {["User Settings", "App Settings"].map((g) => {
           const items = visible.filter((s) => s.group === g);
           if (!items.length) return null;
           return (
             <div key={g} className="mt-2 flex flex-col gap-0.5 border-t border-line pt-3 first-of-type:border-0">
-              <div className="px-2 pb-1 text-[11px] font-bold tracking-wider text-muted uppercase">{g}</div>
+              <div className="px-2 pb-1 text-[11px] font-bold tracking-wider text-muted uppercase">{t(g)}</div>
               {items.map(({ id, label, icon: Icon }) => (
                 <button key={id} onClick={() => setSection(id)} className={cx("flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[15px]", section === id ? "bg-elevated text-fg" : "text-fg2 hover:bg-hover hover:text-fg")}>
-                  <Icon size={18} /> {label}
+                  <Icon size={18} /> {t(label)}
                 </button>
               ))}
             </div>
           );
         })}
-        {visible.length === 0 && <p className="px-2 py-4 text-sm text-muted">No settings match “{query}”.</p>}
+        {visible.length === 0 && <p className="px-2 py-4 text-sm text-muted">{t("No settings match “{query}”.", { query })}</p>}
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 px-8">
-          <span className="text-fg2">Settings</span>
+          <span className="text-fg2">{t("Settings")}</span>
           <span className="text-muted">/</span>
           <current.icon size={17} />
-          <span className="font-semibold">{current.label}</span>
+          <span className="font-semibold">{t(current.label)}</span>
           <div className="flex-1" />
-          <button onClick={onClose} title="Close (Esc)" className="flex flex-col items-center gap-0.5 text-fg2 hover:text-fg">
+          <button onClick={onClose} title={t("Close (Esc)")} className="flex flex-col items-center gap-0.5 text-fg2 hover:text-fg">
             <span className="flex size-8 items-center justify-center rounded-full border border-faint">
               <X size={16} />
             </span>
@@ -73,6 +75,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
             {section === "voice" && <VoiceSection />}
             {section === "sounds" && <SoundsSection />}
             {section === "appearance" && <AppearanceSection />}
+            {section === "language" && <LanguageSection />}
             {section === "advanced" && <AdvancedSection />}
           </div>
         </div>
@@ -163,24 +166,24 @@ function ProfileSection() {
 
   return (
     <>
-      <Title title="Profile" subtitle="Your name, picture and bio. Everyone in the server sees them." />
+      <Title title={t("Profile")} subtitle={t("Your name, picture and bio. Everyone in the server sees them.")} />
       <div className="grid gap-8 md:grid-cols-[1fr_300px]">
         <div className="flex flex-col gap-5">
-          <Field label="Display name">
+          <Field label={t("Display name")}>
             <div className="relative">
               <input value={draft.name} maxLength={32} onChange={(e) => set({ name: e.target.value })} className={input} />
               <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted">{draft.name.length}/32</span>
             </div>
           </Field>
-          <Field label="About me">
+          <Field label={t("About me")}>
             <div className="relative">
-              <textarea value={draft.bio} maxLength={MAX_BIO_LENGTH} onChange={(e) => set({ bio: e.target.value })} rows={4} placeholder="Tell your friends about yourself…" className={cx(input, "h-auto resize-none py-2.5")} />
+              <textarea value={draft.bio} maxLength={MAX_BIO_LENGTH} onChange={(e) => set({ bio: e.target.value })} rows={4} placeholder={t("Tell your friends about yourself…")} className={cx(input, "h-auto resize-none py-2.5")} />
               <span className="absolute right-3 bottom-2 text-xs text-muted">
                 {draft.bio.length}/{MAX_BIO_LENGTH}
               </span>
             </div>
           </Field>
-          <Field label="Name color">
+          <Field label={t("Name color")}>
             <div className="flex items-center gap-3">
               <input type="range" min={0} max={359} value={draft.hue} onChange={(e) => set({ hue: Number(e.target.value) })} className="flex-1 accent-[#10b981]" />
               <span className="w-24 truncate text-sm font-semibold" style={{ color: `hsl(${draft.hue} 60% 70%)` }}>
@@ -188,7 +191,7 @@ function ProfileSection() {
               </span>
             </div>
           </Field>
-          <Field label="Banner color">
+          <Field label={t("Banner color")}>
             <div className="flex flex-wrap gap-2">
               {BANNERS.map((c) => (
                 <button key={c} type="button" onClick={() => set({ banner: c })} aria-label={c} className={cx("size-9 rounded-md border-2", draft.banner === c ? "border-accent" : "border-transparent")} style={{ background: c }} />
@@ -212,7 +215,7 @@ function ProfileSection() {
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            <span className="text-[13px] font-semibold">Profile picture</span>
+            <span className="text-[13px] font-semibold">{t("Profile picture")}</span>
             <input
               ref={file}
               type="file"
@@ -222,12 +225,12 @@ function ProfileSection() {
                 const f = e.target.files?.[0];
                 e.target.value = "";
                 if (!f) return;
-                if (f.size > 5 * 1024 * 1024) return setErr("Images up to 5 MB.");
+                if (f.size > 5 * 1024 * 1024) return setErr(t("Images up to 5 MB."));
                 try {
                   setErr(null);
                   set({ avatar: await toAvatar(f) });
                 } catch {
-                  setErr("Couldn't read that image.");
+                  setErr(t("Couldn't read that image."));
                 }
               }}
             />
@@ -237,11 +240,11 @@ function ProfileSection() {
               </Button>
               {draft.avatar && (
                 <Button variant="ghost" onClick={() => set({ avatar: null })}>
-                  Remove
+                  {t("Remove")}
                 </Button>
               )}
             </div>
-            <span className="text-xs text-muted">PNG, JPG or WebP, up to 5 MB. Shown at 128 px.</span>
+            <span className="text-xs text-muted">{t("PNG, JPG or WebP, up to 5 MB. Shown at 128 px.")}</span>
             {err && <span className="text-xs text-red">{err}</span>}
           </div>
         </div>
@@ -249,12 +252,12 @@ function ProfileSection() {
 
       {dirty && (
         <div className="animate-pop sticky bottom-0 mt-6 flex items-center gap-3 rounded-lg border border-line bg-elevated px-4 py-3 shadow-xl">
-          <span className="flex-1 text-sm">Careful — you have unsaved changes!</span>
+          <span className="flex-1 text-sm">{t("Careful — you have unsaved changes!")}</span>
           <Button variant="ghost" onClick={() => setDraft(st.profile)}>
-            Reset
+            {t("Reset")}
           </Button>
           <Button variant="primary" onClick={save}>
-            Save Changes
+            {t("Save Changes")}
           </Button>
         </div>
       )}
@@ -279,8 +282,8 @@ function VoiceSection() {
   const st = useSettings();
   const devices = useDevices();
   const list = (kind: MediaDeviceKind) => [
-    { value: "", label: "Default" },
-    ...devices.filter((d) => d.kind === kind && d.deviceId !== "default" && d.deviceId).map((d, i) => ({ value: d.deviceId, label: d.label || `Device ${i + 1}` })),
+    { value: "", label: t("Default") },
+    ...devices.filter((d) => d.kind === kind && d.deviceId !== "default" && d.deviceId).map((d, i) => ({ value: d.deviceId, label: d.label || t("Device {n}", { n: i + 1 }) })),
   ];
   const audio = (patch: Partial<typeof st>) => {
     settings.update(patch);
@@ -289,30 +292,30 @@ function VoiceSection() {
 
   return (
     <>
-      <Title title="Voice & Video" subtitle="Devices and audio processing. Changes apply right away, even during a call." />
+      <Title title={t("Voice & Video")} subtitle={t("Devices and audio processing. Changes apply right away, even during a call.")} />
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="Input device">
+        <Field label={t("Input device")}>
           <Select value={st.inputDevice} onChange={(v) => audio({ inputDevice: v })} options={list("audioinput")} />
         </Field>
-        <Field label="Output device">
+        <Field label={t("Output device")}>
           <Select value={st.outputDevice} onChange={(v) => settings.update({ outputDevice: v })} options={list("audiooutput")} />
         </Field>
       </div>
       <MicTest />
 
       <div className="mt-6 divide-y divide-line border-t border-line">
-        <Switch label="Echo cancellation" hint="Removes your speakers' sound from your mic." checked={st.echoCancellation} onChange={(v) => audio({ echoCancellation: v })} />
-        <Switch label="Noise suppression" hint="Filters keyboard, fans and background noise." checked={st.noiseSuppression} onChange={(v) => audio({ noiseSuppression: v })} />
-        <Switch label="Automatic gain control" hint="Keeps your volume steady when you move away from the mic." checked={st.autoGainControl} onChange={(v) => audio({ autoGainControl: v })} />
+        <Switch label={t("Echo cancellation")} hint={t("Removes your speakers' sound from your mic.")} checked={st.echoCancellation} onChange={(v) => audio({ echoCancellation: v })} />
+        <Switch label={t("Noise suppression")} hint={t("Filters keyboard, fans and background noise.")} checked={st.noiseSuppression} onChange={(v) => audio({ noiseSuppression: v })} />
+        <Switch label={t("Automatic gain control")} hint={t("Keeps your volume steady when you move away from the mic.")} checked={st.autoGainControl} onChange={(v) => audio({ autoGainControl: v })} />
       </div>
 
-      <h3 className="mt-8 mb-4 border-t border-line pt-6 text-[15px] font-semibold">Video & streaming</h3>
+      <h3 className="mt-8 mb-4 border-t border-line pt-6 text-[15px] font-semibold">{t("Video & streaming")}</h3>
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="Camera" hint="Used the next time you turn on video.">
+        <Field label={t("Camera")} hint={t("Used the next time you turn on video.")}>
           <Select value={st.cameraDevice} onChange={(v) => settings.update({ cameraDevice: v })} options={list("videoinput")} />
         </Field>
-        <Field label="Default stream quality" hint="Pre-selected when you Go Live.">
-          <Select value={st.defaultPreset} onChange={(v) => settings.update({ defaultPreset: v })} options={SCREEN_PRESETS.map((p) => ({ value: p.id, label: p.label }))} />
+        <Field label={t("Default stream quality")} hint={t("Pre-selected when you Go Live.")}>
+          <Select value={st.defaultPreset} onChange={(v) => settings.update({ defaultPreset: v })} options={SCREEN_PRESETS.map((p) => ({ value: p.id, label: t(p.label) }))} />
         </Field>
       </div>
     </>
@@ -361,12 +364,12 @@ function MicTest() {
   return (
     <div className="mt-5 flex items-center gap-4 rounded-lg border border-line bg-canvas p-4">
       <Button variant={level === null ? "primary" : "secondary"} onClick={() => (level === null ? void start() : stop.current?.())}>
-        {level === null ? "Let's Check" : "Stop Testing"}
+        {level === null ? t("Let's Check") : t("Stop Testing")}
       </Button>
       <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-elevated">
         <div className="h-full rounded-full bg-accent transition-[width] duration-75" style={{ width: `${(level ?? 0) * 100}%` }} />
       </div>
-      <span className="w-40 text-xs text-muted">{level === null ? "Say something to test your mic." : "Talk — the bar should move."}</span>
+      <span className="w-40 text-xs text-muted">{level === null ? t("Say something to test your mic.") : t("Talk — the bar should move.")}</span>
     </div>
   );
 }
@@ -378,15 +381,15 @@ function SoundsSection() {
   const set = (k: keyof typeof st.sounds) => (v: boolean) => settings.update((s) => ({ sounds: { ...s.sounds, [k]: v } }));
   return (
     <>
-      <Title title="Sounds" subtitle="Short cues played by the app." />
+      <Title title={t("Sounds")} subtitle={t("Short cues played by the app.")} />
       <div className="divide-y divide-line">
-        <Switch label="Someone joins your voice channel" checked={st.sounds.join} onChange={set("join")} />
-        <Switch label="Someone leaves your voice channel" checked={st.sounds.leave} onChange={set("leave")} />
-        <Switch label="Mute / deafen" checked={st.sounds.mute} onChange={set("mute")} />
-        <Switch label="New chat message" checked={st.sounds.message} onChange={set("message")} />
+        <Switch label={t("Someone joins your voice channel")} checked={st.sounds.join} onChange={set("join")} />
+        <Switch label={t("Someone leaves your voice channel")} checked={st.sounds.leave} onChange={set("leave")} />
+        <Switch label={t("Mute / deafen")} checked={st.sounds.mute} onChange={set("mute")} />
+        <Switch label={t("New chat message")} checked={st.sounds.message} onChange={set("message")} />
       </div>
       <Button className="mt-4" onClick={() => sounds.test()}>
-        Play a test sound
+        {t("Play a test sound")}
       </Button>
     </>
   );
@@ -396,16 +399,16 @@ function AppearanceSection() {
   const st = useSettings();
   return (
     <>
-      <Title title="Appearance" subtitle="Size and density of the interface." />
-      <Field label={`Zoom level · ${Math.round(st.zoom * 100)}%`}>
+      <Title title={t("Appearance")} subtitle={t("Size and density of the interface.")} />
+      <Field label={t("Zoom level · {value}%", { value: Math.round(st.zoom * 100) })}>
         <input type="range" min={80} max={130} step={5} value={Math.round(st.zoom * 100)} onChange={(e) => settings.update({ zoom: Number(e.target.value) / 100 })} className="accent-[#10b981]" />
       </Field>
       <div className="mt-6 flex flex-col gap-2">
-        <span className="text-[13px] font-semibold">Chat message display</span>
+        <span className="text-[13px] font-semibold">{t("Chat message display")}</span>
         <div className="grid grid-cols-2 gap-2">
           {[
-            [false, "Cozy", "Avatars and names on separate lines"],
-            [true, "Compact", "More messages on screen"],
+            [false, t("Cozy"), t("Avatars and names on separate lines")],
+            [true, t("Compact"), t("More messages on screen")],
           ].map(([v, label, hint]) => (
             <button key={String(v)} onClick={() => settings.update({ compactChat: v as boolean })} className={cx("flex flex-col items-start rounded-lg border p-3 text-left", st.compactChat === v ? "border-accent bg-accent/10" : "border-line hover:border-faint")}>
               <span className="flex items-center gap-1.5 text-sm font-semibold">
@@ -417,7 +420,38 @@ function AppearanceSection() {
         </div>
       </div>
       <div className="mt-4 border-t border-line pt-2">
-        <Switch label="Hide non-video participants" hint="In a call, show only cameras and streams when there are any." checked={st.hideNonVideo} onChange={(v) => settings.update({ hideNonVideo: v })} />
+        <Switch label={t("Hide non-video participants")} hint={t("In a call, show only cameras and streams when there are any.")} checked={st.hideNonVideo} onChange={(v) => settings.update({ hideNonVideo: v })} />
+      </div>
+    </>
+  );
+}
+
+function LanguageSection() {
+  const st = useSettings();
+  return (
+    <>
+      <Title title={t("Language")} subtitle={t("Language of the interface.")} />
+      <div className="grid gap-2 sm:grid-cols-2">
+        {(
+          [
+            ["en", "English", "English"],
+            ["pt-BR", "Português (Brasil)", "Portuguese (Brazil)"],
+          ] as const
+        ).map(([id, label, english]) => (
+          <button
+            key={id}
+            onClick={() => settings.update({ language: id })}
+            className={cx("flex items-center gap-3 rounded-lg border p-4 text-left", st.language === id ? "border-accent bg-accent/10" : "border-line hover:border-faint")}
+          >
+            <span className={cx("flex size-5 items-center justify-center rounded-full border-2", st.language === id ? "border-accent" : "border-faint")}>
+              {st.language === id && <span className="size-2.5 rounded-full bg-accent" />}
+            </span>
+            <span>
+              <span className="block text-[15px] font-semibold">{label}</span>
+              <span className="block text-xs text-muted">{english}</span>
+            </span>
+          </button>
+        ))}
       </div>
     </>
   );
@@ -429,17 +463,17 @@ function AdvancedSection() {
   const version = useMemo(() => (typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev"), []);
   return (
     <>
-      <Title title="Advanced" subtitle="Networking and maintenance." />
+      <Title title={t("Advanced")} subtitle={t("Networking and maintenance.")} />
       <Switch
-        label="Allow calls over the internet"
-        hint="Uses a public STUN server only to discover addresses behind routers. Voice and video still go peer to peer. Applies the next time you connect."
+        label={t("Allow calls over the internet")}
+        hint={t("Uses a public STUN server only to discover addresses behind routers. Voice and video still go peer to peer. Applies the next time you connect.")}
         checked={st.publicStun}
         onChange={(v) => settings.update({ publicStun: v })}
       />
       <div className="mt-6 flex items-center gap-3 border-t border-line pt-6">
         <div className="flex-1">
-          <div className="text-[15px]">Reset all settings</div>
-          <div className="text-xs text-muted">Profile, devices, per-user volumes and appearance go back to defaults.</div>
+          <div className="text-[15px]">{t("Reset all settings")}</div>
+          <div className="text-xs text-muted">{t("Profile, devices, per-user volumes and appearance go back to defaults.")}</div>
         </div>
         <Button
           variant={confirm ? "danger" : "secondary"}
@@ -453,7 +487,7 @@ function AdvancedSection() {
             location.reload();
           }}
         >
-          {confirm ? "Click again to reset" : "Reset"}
+          {confirm ? t("Click again to reset") : t("Reset")}
         </Button>
       </div>
       <p className="mt-6 text-xs text-muted">Talkas {version}</p>

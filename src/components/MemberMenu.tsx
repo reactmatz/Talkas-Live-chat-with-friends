@@ -1,4 +1,5 @@
 import { Check, Copy, Expand, Headphones, LogOut, MonitorUp, PhoneOff, VideoOff } from "lucide-react";
+import { t } from "../lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { session, useSession } from "../lib/session";
 import { settings, useSettings } from "../lib/settings";
@@ -68,22 +69,22 @@ export function MemberMenu({ target, onClose, onFullscreen }: { target: MenuTarg
     >
       {!self && inMyRoom && (
         <>
-          <Slider label="User Volume" value={peer.volume} onChange={(v) => settings.setPeer(m.name, { volume: v })} />
-          <Toggle icon={Headphones} label="Mute" checked={peer.muted} onChange={(v) => settings.setPeer(m.name, { muted: v })} />
-          {m.state.sharing && <Slider label="Stream Volume" value={peer.streamVolume} onChange={(v) => settings.setPeer(m.name, { streamVolume: v })} />}
+          <Slider label={t("User Volume")} value={peer.volume} onChange={(v) => settings.setPeer(m.name, { volume: v })} />
+          <Toggle icon={Headphones} label={t("Mute")} checked={peer.muted} onChange={(v) => settings.setPeer(m.name, { muted: v })} />
+          {m.state.sharing && <Slider label={t("Stream Volume")} value={peer.streamVolume} onChange={(v) => settings.setPeer(m.name, { streamVolume: v })} />}
         </>
       )}
-      {inMyRoom && <Toggle icon={VideoOff} label="Hide Non-Video Participants" checked={st.hideNonVideo} onChange={(v) => settings.update({ hideNonVideo: v })} />}
-      {target.stream && onFullscreen && <Item icon={Expand} label="Fullscreen" onClick={run(onFullscreen)} />}
-      {self && s.local.sharing && <Item icon={MonitorUp} label="Stop Streaming" onClick={run(() => void session.stopShare())} />}
+      {inMyRoom && <Toggle icon={VideoOff} label={t("Hide Non-Video Participants")} checked={st.hideNonVideo} onChange={(v) => settings.update({ hideNonVideo: v })} />}
+      {target.stream && onFullscreen && <Item icon={Expand} label={t("Fullscreen")} onClick={run(onFullscreen)} />}
+      {self && s.local.sharing && <Item icon={MonitorUp} label={t("Stop Streaming")} onClick={run(() => void session.stopShare())} />}
 
       <Separator />
-      <Item icon={Copy} label="Copy Name" onClick={run(() => void navigator.clipboard.writeText(m.name))} />
-      {self && s.voiceChannel && <Item icon={LogOut} label="Disconnect" onClick={run(() => session.leaveVoice())} />}
+      <Item icon={Copy} label={t("Copy Name")} onClick={run(() => void navigator.clipboard.writeText(m.name))} />
+      {self && s.voiceChannel && <Item icon={LogOut} label={t("Disconnect")} onClick={run(() => session.leaveVoice())} />}
       {!self && me?.host && inAnyVoice && (
         <>
           <Separator />
-          <Item icon={PhoneOff} label="Disconnect from Voice" danger onClick={run(() => session.kickFromVoice(m.id))} />
+          <Item icon={PhoneOff} label={t("Disconnect from Voice")} danger onClick={run(() => session.kickFromVoice(m.id))} />
         </>
       )}
     </div>

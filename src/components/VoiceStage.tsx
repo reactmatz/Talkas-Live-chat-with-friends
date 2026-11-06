@@ -1,4 +1,5 @@
 import { Headphones, HeadphoneOff, Maximize, Mic, MicOff, Minimize, MonitorUp, MonitorX, PhoneOff, Video, VideoOff, Volume2 } from "lucide-react";
+import { t } from "../lib/i18n";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Channel } from "../../shared/protocol";
 import { session, useSession } from "../lib/session";
@@ -85,9 +86,9 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
       <section className="flex flex-1 flex-col items-center justify-center gap-4 bg-void">
         <Volume2 size={40} className="text-muted" />
         <div className="text-xl font-semibold">{channel.name}</div>
-        <p className="text-sm text-fg2">{(s.voice[channel.id] ?? []).length || "No one"} in voice right now.</p>
+        <p className="text-sm text-fg2">{(s.voice[channel.id] ?? []).length ? t("{count} in voice right now.", { count: (s.voice[channel.id] ?? []).length }) : t("No one in voice right now.")}</p>
         <Button variant="primary" onClick={() => void session.joinVoice(channel.id)}>
-          Join Voice
+          {t("Join Voice")}
         </Button>
       </section>
     );
@@ -150,13 +151,13 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
         onPointerLeave={() => setOverToolbar(false)}
         className={cx("absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-line bg-panel/90 p-2 shadow-2xl backdrop-blur transition-[opacity,transform]", chrome, idle && "translate-y-3")}
       >
-        <Ctl on={!s.local.muted} onIcon={Mic} offIcon={MicOff} label={s.local.muted ? "Unmute" : "Mute"} onClick={() => session.toggleMute()} />
-        <Ctl on={!s.local.deafened} onIcon={Headphones} offIcon={HeadphoneOff} label={s.local.deafened ? "Undeafen" : "Deafen"} onClick={() => session.toggleDeafen()} />
-        <Ctl on={s.local.camera} onIcon={Video} offIcon={VideoOff} label={s.local.camera ? "Turn off camera" : "Turn on camera"} onClick={() => void session.toggleCamera()} neutralOff />
-        <Ctl on={s.local.sharing} onIcon={MonitorX} offIcon={MonitorUp} label={s.local.sharing ? "Stop sharing" : "Share your screen"} onClick={() => (s.local.sharing ? void session.stopShare() : onShare())} neutralOff accentOn />
+        <Ctl on={!s.local.muted} onIcon={Mic} offIcon={MicOff} label={s.local.muted ? t("Unmute") : t("Mute")} onClick={() => session.toggleMute()} />
+        <Ctl on={!s.local.deafened} onIcon={Headphones} offIcon={HeadphoneOff} label={s.local.deafened ? t("Undeafen") : t("Deafen")} onClick={() => session.toggleDeafen()} />
+        <Ctl on={s.local.camera} onIcon={Video} offIcon={VideoOff} label={s.local.camera ? t("Turn off camera") : t("Turn on camera")} onClick={() => void session.toggleCamera()} neutralOff />
+        <Ctl on={s.local.sharing} onIcon={MonitorX} offIcon={MonitorUp} label={s.local.sharing ? t("Stop sharing") : t("Share your screen")} onClick={() => (s.local.sharing ? void session.stopShare() : onShare())} neutralOff accentOn />
         <div className="mx-1 h-7 w-px bg-line" />
-        <Ctl on onIcon={fullscreen.active ? Minimize : Maximize} offIcon={Maximize} label={fullscreen.active ? "Exit fullscreen (F)" : "Fullscreen (F)"} onClick={fullscreen.toggle} />
-        <button title="Disconnect" onClick={() => session.leaveVoice()} className="flex h-11 w-14 items-center justify-center rounded-xl bg-red text-fg transition-colors hover:bg-red/85">
+        <Ctl on onIcon={fullscreen.active ? Minimize : Maximize} offIcon={Maximize} label={fullscreen.active ? t("Exit fullscreen (F)") : t("Fullscreen (F)")} onClick={fullscreen.toggle} />
+        <button title={t("Disconnect")} onClick={() => session.leaveVoice()} className="flex h-11 w-14 items-center justify-center rounded-xl bg-red text-fg transition-colors hover:bg-red/85">
           <PhoneOff size={20} />
         </button>
       </div>
@@ -206,17 +207,17 @@ function TileView({
       {tile.stream ? (
         <VideoView stream={tile.stream} mirror={tile.self && !isScreen} contain={isScreen || big} />
       ) : isScreen ? (
-        <span className="text-sm text-muted">Connecting to stream…</span>
+        <span className="text-sm text-muted">{t("Connecting to stream…")}</span>
       ) : (
         <Avatar name={tile.name} hue={tile.hue} src={tile.avatar} size={big ? 96 : 72} speaking={tile.speaking} />
       )}
       <Label idle={idle}>
-        {isScreen && <span className="rounded bg-red px-1 text-[10px] font-bold">LIVE</span>}
+        {isScreen && <span className="rounded bg-red px-1 text-[10px] font-bold">{t("LIVE")}</span>}
         {tile.muted && !isScreen && <MicOff size={13} className="text-red" />}
-        <span>{isScreen ? `${tile.name}'s screen` : tile.name}</span>
+        <span>{isScreen ? t("{name}'s screen", { name: tile.name }) : tile.name}</span>
       </Label>
       {isScreen && !big && (
-        <span className="absolute inset-0 flex items-center justify-center bg-void/40 text-sm font-semibold opacity-0 transition-opacity group-hover:opacity-100">Watch stream</span>
+        <span className="absolute inset-0 flex items-center justify-center bg-void/40 text-sm font-semibold opacity-0 transition-opacity group-hover:opacity-100">{t("Watch stream")}</span>
       )}
     </div>
   );

@@ -7,8 +7,18 @@ export interface ScreenSource {
   icon: string | null;
 }
 
+import type { Channel } from "../../shared/protocol";
+
+export interface SavedServer {
+  id: string;
+  name: string;
+  channels: Channel[];
+  createdAt: number;
+}
+
 export interface HostInfo {
   running: boolean;
+  serverId: string;
   name: string;
   port: number;
   inviteKey: string;
@@ -25,7 +35,13 @@ export type TunnelState =
 
 interface NativeApi {
   platform: string;
-  host: { start(name: string, port?: number): Promise<HostInfo>; stop(): Promise<void>; info(): Promise<HostInfo> };
+  host: { start(serverId: string, port?: number): Promise<HostInfo>; stop(): Promise<void>; info(): Promise<HostInfo> };
+  servers: {
+    list(): Promise<SavedServer[]>;
+    create(name: string): Promise<SavedServer>;
+    update(id: string, patch: { name?: string; channels?: Channel[] }): Promise<SavedServer>;
+    delete(id: string): Promise<void>;
+  };
   tunnel: {
     state(): Promise<TunnelState>;
     start(): Promise<TunnelState>;

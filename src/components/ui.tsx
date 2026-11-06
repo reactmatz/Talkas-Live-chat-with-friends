@@ -1,4 +1,5 @@
 import { Copy, Minus, Square, X, type LucideIcon } from "lucide-react";
+import { t } from "../lib/i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import logo from "../assets/talkas-symbol.svg";
 import { native } from "../lib/native";
@@ -94,7 +95,7 @@ export function Modal({ title, onClose, children, width = 560 }: { title: string
       <div className="animate-pop flex max-h-full w-full flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl" style={{ maxWidth: width }}>
         <div className="flex items-center border-b border-line px-5 py-3.5">
           <h2 className="flex-1 text-[15px] font-semibold">{title}</h2>
-          <IconButton icon={X} label="Close" onClick={onClose} />
+          <IconButton icon={X} label={t("Close")} onClick={onClose} />
         </div>
         <div className="min-h-0 overflow-y-auto">{children}</div>
       </div>
@@ -117,13 +118,13 @@ export function TitleBar({ title }: { title: string }) {
       <span className="flex-1">{title}</span>
       {native && (
         <div className="flex h-full" onDoubleClick={(e) => e.stopPropagation()}>
-          <button aria-label="Minimize" title="Minimize" onClick={() => native!.window.minimize()} className={cx(btn, "hover:bg-hover hover:text-fg")}>
+          <button aria-label={t("Minimize")} title={t("Minimize")} onClick={() => native!.window.minimize()} className={cx(btn, "hover:bg-hover hover:text-fg")}>
             <Minus size={16} strokeWidth={1.5} />
           </button>
-          <button aria-label={maximized ? "Restore" : "Maximize"} title={maximized ? "Restore Down" : "Maximize"} onClick={() => native!.window.maximize()} className={cx(btn, "hover:bg-hover hover:text-fg")}>
+          <button aria-label={maximized ? t("Restore") : t("Maximize")} title={maximized ? t("Restore Down") : t("Maximize")} onClick={() => native!.window.maximize()} className={cx(btn, "hover:bg-hover hover:text-fg")}>
             {maximized ? <Copy size={13} strokeWidth={1.5} className="-scale-x-100" /> : <Square size={13} strokeWidth={1.5} />}
           </button>
-          <button aria-label="Close" title="Close" onClick={() => native!.window.close()} className={cx(btn, "hover:bg-[#c42b1c] hover:text-fg")}>
+          <button aria-label={t("Close")} title={t("Close")} onClick={() => native!.window.close()} className={cx(btn, "hover:bg-[#c42b1c] hover:text-fg")}>
             <X size={17} strokeWidth={1.5} />
           </button>
         </div>

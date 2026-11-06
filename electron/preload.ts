@@ -4,9 +4,15 @@ import { contextBridge, ipcRenderer } from "electron";
 const api = {
   platform: process.platform,
   host: {
-    start: (name: string, port?: number) => ipcRenderer.invoke("host:start", { name, port }),
+    start: (serverId: string, port?: number) => ipcRenderer.invoke("host:start", serverId, port),
     stop: () => ipcRenderer.invoke("host:stop"),
     info: () => ipcRenderer.invoke("host:info"),
+  },
+  servers: {
+    list: () => ipcRenderer.invoke("servers:list"),
+    create: (name: string) => ipcRenderer.invoke("servers:create", name),
+    update: (id: string, patch: unknown) => ipcRenderer.invoke("servers:update", id, patch),
+    delete: (id: string) => ipcRenderer.invoke("servers:delete", id),
   },
   tunnel: {
     state: () => ipcRenderer.invoke("tunnel:state"),

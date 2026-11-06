@@ -27,13 +27,14 @@ interface Client {
 }
 
 export interface HostOptions {
-  name: string;
+  server: ServerInfo;
   port: number;
   dataDir: string;
 }
 
 export interface HostInfo {
   running: boolean;
+  serverId: string;
   name: string;
   port: number;
   inviteKey: string;
@@ -61,22 +62,13 @@ export class SignalingServer {
   private history: Record<string, ChatMessage[]> = {};
   private timers: NodeJS.Timeout[] = [];
   private saveTimer: NodeJS.Timeout | null = null;
-  private info: HostInfo = { running: false, name: "", port: 0, inviteKey: "", hostToken: "", addresses: [] };
-  private server: ServerInfo = { name: "", channels: [] };
+  private info: HostInfo = { running: false, serverId: "", name: "", port: 0, inviteKey: "", hostToken: "", addresses: [] };
+  private server: ServerInfo = { id: "", name: "", channels: [] };
   private historyFile = "";
 
   async start(opts: HostOptions): Promise<HostInfo> {
     await this.stop();
-    this.server = {
-      name: opts.name,
-      channels: [
-        { id: "general", name: "general", kind: "text" },
-        { id: "clips", name: "clips-and-links", kind: "text" },
-        { id: "lounge", name: "Lounge", kind: "voice" },
-        { id: "gaming", name: "Gaming", kind: "voice" },
-        { id: "watch", name: "Watch Party", kind: "voice" },
-      ],
-    };
+    this.server = { id: opts.server.id, name: opts.server.name, channels: opts.server.channels.map((c) => ({ ...c })) };
     for (const c of this.server.channels) if (c.kind === "voice") this.voice.set(c.id, new Set());
 
     mkdirSync(opts.dataDir, { recursive: true });
@@ -119,7 +111,7 @@ export class SignalingServer {
       }, 1_000),
     );
 
-    this.info = { running: true, name: opts.name, port: opts.port, inviteKey, hostToken: randomBytes(16).toString("hex"), addresses: lanAddresses(opts.port) };
+    this.info = { running: true, serverId: opts.server.id, name: opts.server.name, port: opts.port, inviteKey, hostToken: randomBytes(16).toString("hex"), addresses: lanAddresses(opts.port) };
     return this.info;
   }
 
@@ -134,11 +126,23 @@ export class SignalingServer {
     await new Promise<void>((r) => (this.http ? this.http.close(() => r()) : r()));
     this.wss = null;
     this.http = null;
-    this.info = { running: false, name: "", port: 0, inviteKey: "", hostToken: "", addresses: [] };
+    this.info = { running: false, serverId: "", name: "", port: 0, inviteKey: "", hostToken: "", addresses: [] };
   }
 
   getInfo(): HostInfo {
     return this.info;
+  }
+
+  /** Live edit (rename server, add/rename/remove channels) while people are connected. */
+  updateServer(server: ServerInfo) {
+    if (!this.info.running || server.id !== this.server.id) return;
+    this.server = { id: server.id, name: server.name, channels: server.channels.map((c) => ({ ...c })) };
+    this.info = { ...this.info, name: server.name };
+    const voiceIds = new Set(this.server.channels.filter((c) => c.kind === "voice").map((c) => c.id));
+    for (const id of [...this.voice.keys()]) if (!voiceIds.has(id)) this.voice.delete(id); // removed rooms drop their members
+    for (const id of voiceIds) if (!this.voice.has(id)) this.voice.set(id, new Set());
+    this.broadcast({ t: "server_update", server: this.server });
+    this.broadcast({ t: "voice", voice: this.voiceMap() });
   }
 
   // ------------------------------------------------------------------ connections

@@ -7,7 +7,10 @@ export interface PeerAudio {
   streamVolume: number; // 0..1
 }
 
+export type Language = "en" | "pt-BR";
+
 export interface Settings {
+  language: Language;
   profile: Profile;
   // voice & video
   inputDevice: string; // "" = system default
@@ -31,6 +34,7 @@ export interface Settings {
 
 const KEY = "talkas.settings";
 const defaults: Settings = {
+  language: typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("pt") ? "pt-BR" : "en",
   profile: { name: "", hue: Math.floor(Math.random() * 360), bio: "", avatar: null, banner: "#1b1e23" },
   inputDevice: "",
   outputDevice: "",

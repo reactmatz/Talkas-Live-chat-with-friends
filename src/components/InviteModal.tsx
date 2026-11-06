@@ -1,4 +1,5 @@
 import { Check, CircleAlert, Copy, Globe, Link2, Loader2, Square, Wifi } from "lucide-react";
+import { t } from "../lib/i18n";
 import { useEffect, useState } from "react";
 import { native, type HostInfo, type TunnelState } from "../lib/native";
 import { Button, Modal } from "./ui";
@@ -38,15 +39,15 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
   const busy = tunnel.state === "downloading" || tunnel.state === "starting";
 
   return (
-    <Modal title={`Invite friends to ${host.name}`} onClose={onClose} width={540}>
+    <Modal title={t("Invite friends to {name}", { name: host.name })} onClose={onClose} width={540}>
       <div className="flex flex-col gap-5 p-5">
-        <Row label="Invite code" value={host.inviteKey} />
+        <Row label={t("Invite code")} value={host.inviteKey} />
 
         {/* Internet — Cloudflare quick tunnel */}
         <section className="flex flex-col gap-3 rounded-lg border border-line p-4">
           <div className="flex items-center gap-2">
             <Globe size={16} className="text-accent" />
-            <span className="flex-1 text-sm font-semibold">Over the internet · link</span>
+            <span className="flex-1 text-sm font-semibold">{t("Over the internet · link")}</span>
             {tunnel.state === "on" && (
               <span className="flex items-center gap-1.5 text-xs text-accent">
                 <span className="size-2 rounded-full bg-accent" /> Online
@@ -56,7 +57,7 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
 
           {tunnel.state === "on" ? (
             <>
-              <Row label="Invite" value={invite} />
+              <Row label={t("Invite")} value={invite} />
               <div className="flex items-center gap-2 text-xs text-accent">
                 <Check size={14} /> Reachable — send this invite to your friends. They paste it into “Join a friend”.
               </div>
@@ -71,9 +72,9 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
               <div className="flex items-center gap-3">
                 <Button variant="primary" disabled={busy || !native} onClick={() => void native?.tunnel.start()}>
                   {busy ? <Loader2 size={15} className="animate-spin" /> : <Link2 size={15} />}
-                  {tunnel.state === "downloading" ? `Downloading… ${tunnel.percent}%` : tunnel.state === "starting" ? "Creating link…" : "Create internet link"}
+                  {tunnel.state === "downloading" ? t("Downloading… {percent}%", { percent: tunnel.percent }) : tunnel.state === "starting" ? t("Creating link…") : t("Create internet link")}
                 </Button>
-                <span className="text-xs text-muted">Free, no account, no router setup.</span>
+                <span className="text-xs text-muted">{t("Free, no account, no router setup.")}</span>
               </div>
               {tunnel.state === "error" && (
                 <div className="flex items-start gap-2 text-xs text-amber">
@@ -85,9 +86,7 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
           )}
 
           <p className="text-xs leading-relaxed text-muted">
-            Uses a Cloudflare tunnel: friends reach your server through a <span className="font-mono text-fg2">trycloudflare.com</span> address and never see your IP during the
-            handshake. The first time, Talkas downloads Cloudflare's <span className="font-mono text-fg2">cloudflared</span>. The link changes every time you start hosting. Voice and
-            video still connect directly between PCs.
+            {t("Uses a Cloudflare tunnel: friends reach your server through a trycloudflare.com address and never see your IP during the handshake. The first time, Talkas downloads Cloudflare's cloudflared. The link changes every time you go live. Voice and video still connect directly between PCs.")}
           </p>
         </section>
 
@@ -95,11 +94,11 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
         <section className="flex flex-col gap-3 rounded-lg border border-line p-4">
           <div className="flex items-center gap-2">
             <Wifi size={16} className="text-fg2" />
-            <span className="text-sm font-semibold">Same Wi-Fi · direct IP</span>
+            <span className="text-sm font-semibold">{t("Same Wi-Fi · direct IP")}</span>
           </div>
-          {host.addresses.length === 0 && <p className="text-xs text-muted">No network adapter found.</p>}
+          {host.addresses.length === 0 && <p className="text-xs text-muted">{t("No network adapter found.")}</p>}
           {host.addresses.map((a) => (
-            <Row key={a} label="LAN address" value={`${a.replace(/^ws:\/\//, "")}#${host.inviteKey}`} />
+            <Row key={a} label={t("LAN address")} value={`${a.replace(/^ws:\/\//, "")}#${host.inviteKey}`} />
           ))}
         </section>
       </div>

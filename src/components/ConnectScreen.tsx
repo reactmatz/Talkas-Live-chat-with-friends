@@ -1,8 +1,10 @@
 import { Globe, Server, Users, X } from "lucide-react";
-import logo from "../assets/talkas-symbol.svg";
 import { useEffect, useState } from "react";
+import logo from "../assets/talkas-symbol.svg";
 import { DEFAULT_PORT } from "../../shared/protocol";
-import { native, type HostInfo } from "../lib/native";
+import { useT } from "../lib/i18n";
+import { native } from "../lib/native";
+import { servers } from "../lib/servers";
 import { session, useSession } from "../lib/session";
 import { settings } from "../lib/settings";
 import { Avatar, Button, cx } from "./ui";
@@ -25,7 +27,8 @@ function save(v: object) {
 
 /**
  * Accepts an invite in any of these forms and splits it into address + code:
- *   name.tun.ply.gg:13157#A1B2C3D4   (copied from the Invite window)
+ *   wss://words.trycloudflare.com#A1B2C3D4   (internet link from the Invite window)
+ *   192.168.0.10:4646#A1B2C3D4               (same Wi-Fi)
  *   192.168.0.10:4646 A1B2C3D4
  */
 export function parseInvite(text: string): { address: string; key: string } | null {
@@ -33,14 +36,26 @@ export function parseInvite(text: string): { address: string; key: string } | nu
   return m ? { address: m[1], key: m[2].toUpperCase() } : null;
 }
 
-/** Host or join, as a dismissible window over the app (click outside or Esc to go back). */
-export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h: HostInfo | null) => void; onClose: () => void; initialMode?: "host" | "join" }) {
+/** Create one of your own servers, or join a friend's — a dismissible window over the app. */
+export function ConnectModal({
+  onCreated,
+  onJoined,
+  onClose,
+  initialMode,
+}: {
+  onCreated: (serverId: string) => void;
+  onJoined: () => void;
+  onClose: () => void;
+  initialMode?: "create" | "join";
+}) {
+  const t = useT();
   const saved = load();
   const s = useSession();
   const st = settings.get();
-  const [mode, setMode] = useState<"host" | "join">(native ? (initialMode ?? "host") : "join");
+  const [mode, setMode] = useState<"create" | "join">(native ? (initialMode ?? "create") : "join");
   const [name, setName] = useState(st.profile.name || saved.name || "");
-  const [serverName, setServerName] = useState(saved.serverName ?? "Game Night");
+  const [serverName, setServerName] = useState("");
+  const [goLive, setGoLive] = useState(false);
   const [address, setAddress] = useState(saved.address ?? "");
   const [key, setKey] = useState("");
   const [stun, setStun] = useState(st.publicStun);
@@ -54,10 +69,13 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
     return () => window.removeEventListener("keydown", esc);
   }, [onClose]);
 
-  // Close once the server welcomed us.
+  // Close once the friend's server welcomed us.
   useEffect(() => {
-    if (submitted && s.status === "open" && s.server) onClose();
-  }, [submitted, s.status, s.server, onClose]);
+    if (submitted && s.status === "open" && s.server) {
+      onJoined();
+      onClose();
+    }
+  }, [submitted, s.status, s.server, onClose, onJoined]);
 
   const hue = st.profile.hue;
   const nick = name.trim() || "Guest";
@@ -69,17 +87,17 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
     return settings.get().profile;
   };
 
-  const host = async () => {
+  const create = async () => {
     setBusy(true);
     setErr(null);
     try {
-      const info = await native!.host.start(serverName.trim() || "My Server", DEFAULT_PORT);
-      save({ name: nick, hue, serverName });
-      onHosted(info);
-      setSubmitted(true);
-      session.connect({ address: `127.0.0.1:${info.port}`, key: info.inviteKey, hostToken: info.hostToken, profile: profile(), publicStun: stun });
+      profile();
+      const srv = await servers.create(serverName.trim() || t("My Server"));
+      if (goLive) await servers.goLive(srv.id);
+      onCreated(srv.id);
+      onClose();
     } catch (e) {
-      setErr(String((e as Error).message ?? e).includes("EADDRINUSE") ? `Port ${DEFAULT_PORT} is already in use.` : "Couldn't start the server.");
+      setErr(servers.errorText(e));
     } finally {
       setBusy(false);
     }
@@ -87,9 +105,7 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
 
   const join = () => {
     save({ name: nick, hue, address });
-    // Joining someone else: stop the server this PC was hosting (if any).
-    void native?.host.stop();
-    onHosted(null);
+    if (servers.get().host) servers.goOffline(); // one server at a time: stop hosting yours
     setSubmitted(true);
     session.connect({ address, key, profile: profile(), publicStun: stun });
   };
@@ -97,7 +113,7 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
   return (
     <div className="fixed inset-x-0 top-8 bottom-0 z-50 flex items-center justify-center overflow-y-auto bg-void/75 p-6 backdrop-blur-[2px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="animate-pop relative flex w-full max-w-[440px] flex-col gap-6 rounded-2xl border border-line bg-panel p-7 shadow-2xl">
-        <button onClick={onClose} aria-label="Close" title="Close (Esc)" className="absolute top-4 right-4 rounded-md p-1.5 text-muted hover:bg-hover hover:text-fg">
+        <button onClick={onClose} aria-label={t("Close")} title={t("Close (Esc)")} className="absolute top-4 right-4 rounded-md p-1.5 text-muted hover:bg-hover hover:text-fg">
           <X size={18} />
         </button>
         <div className="flex flex-col gap-1.5">
@@ -105,16 +121,16 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
             <img src={logo} alt="" className="size-6" draggable={false} />
             <span className="text-xs font-bold tracking-[0.14em] uppercase">Talkas</span>
           </div>
-          <h1 className="text-[22px] font-bold tracking-tight">Talk, play and stream — peer to peer.</h1>
-          <p className="text-sm leading-relaxed text-fg2">Voice and screens go straight between computers. No accounts, no media servers.</p>
+          <h1 className="text-[22px] font-bold tracking-tight">{t("Talk, play and stream — peer to peer.")}</h1>
+          <p className="text-sm leading-relaxed text-fg2">{t("Voice and screens go straight between computers. No accounts, no media servers.")}</p>
         </div>
 
         {native && (
           <div className="grid grid-cols-2 gap-1 rounded-lg border border-line bg-canvas p-1">
             {(
               [
-                ["host", Server, "Host a server"],
-                ["join", Users, "Join a friend"],
+                ["create", Server, t("Create a server")],
+                ["join", Users, t("Join a friend")],
               ] as const
             ).map(([id, Icon, label]) => (
               <button
@@ -132,28 +148,34 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (mode === "host") void host();
+            if (mode === "create") void create();
             else join();
           }}
         >
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold tracking-wider text-muted uppercase">Display name</span>
+            <span className="text-[11px] font-bold tracking-wider text-muted uppercase">{t("Display name")}</span>
             <div className="flex items-center gap-3">
               <Avatar name={nick} hue={hue} size={40} src={st.profile.avatar} />
-              <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="How friends see you" maxLength={32} autoFocus />
+              <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("How friends see you")} maxLength={32} autoFocus />
             </div>
           </label>
 
-          {mode === "host" ? (
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold tracking-wider text-muted uppercase">Server name</span>
-              <input className={field} value={serverName} onChange={(e) => setServerName(e.target.value)} maxLength={40} />
-              <span className="text-xs text-muted">Runs on this PC (port {DEFAULT_PORT}). Invite friends on the same Wi-Fi or with an internet link.</span>
-            </label>
+          {mode === "create" ? (
+            <>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-bold tracking-wider text-muted uppercase">{t("Server name")}</span>
+                <input className={field} value={serverName} onChange={(e) => setServerName(e.target.value)} placeholder={t("Game Night")} maxLength={40} />
+                <span className="text-xs text-muted">{t("Saved on this PC. Set up its channels first and go live whenever you want to host it.")}</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-fg2">
+                <input type="checkbox" checked={goLive} onChange={(e) => setGoLive(e.target.checked)} className="accent-[#10b981]" />
+                {t("Go live right away")}
+              </label>
+            </>
           ) : (
             <>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold tracking-wider text-muted uppercase">Address or invite</span>
+                <span className="text-[11px] font-bold tracking-wider text-muted uppercase">{t("Address or invite")}</span>
                 <input
                   className={cx(field, "font-mono")}
                   value={address}
@@ -164,32 +186,31 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
                       setKey(inv.key);
                     } else setAddress(e.target.value);
                   }}
-                  placeholder={`wss://….trycloudflare.com or 192.168.0.10:${DEFAULT_PORT}`}
+                  placeholder={`wss://….trycloudflare.com ${t("or")} 192.168.0.10:${DEFAULT_PORT}`}
                 />
-                <span className="text-xs text-muted">Paste the whole invite (address#CODE) and the code fills in by itself.</span>
+                <span className="text-xs text-muted">{t("Paste the whole invite (address#CODE) and the code fills in by itself.")}</span>
               </label>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold tracking-wider text-muted uppercase">Invite code</span>
+                <span className="text-[11px] font-bold tracking-wider text-muted uppercase">{t("Invite code")}</span>
                 <input className={cx(field, "font-mono tracking-[0.2em] uppercase")} value={key} onChange={(e) => setKey(e.target.value)} placeholder="A1B2C3D4" maxLength={8} />
+              </label>
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm text-fg2">
+                <input type="checkbox" checked={stun} onChange={(e) => setStun(e.target.checked)} className="mt-0.5 accent-[#10b981]" />
+                <span>
+                  <span className="flex items-center gap-1.5 text-fg">
+                    <Globe size={13} /> {t("Allow calls over the internet")}
+                  </span>
+                  <span className="text-xs text-muted">{t("Uses a public STUN server only to find addresses. Media still goes peer to peer. Off = LAN only.")}</span>
+                </span>
               </label>
             </>
           )}
 
-          <label className="flex cursor-pointer items-start gap-2.5 text-sm text-fg2">
-            <input type="checkbox" checked={stun} onChange={(e) => setStun(e.target.checked)} className="mt-0.5 accent-[#10b981]" />
-            <span>
-              <span className="flex items-center gap-1.5 text-fg">
-                <Globe size={13} /> Allow calls over the internet
-              </span>
-              <span className="text-xs text-muted">Uses a public STUN server only to find addresses. Media still goes peer to peer. Off = LAN only.</span>
-            </span>
-          </label>
-
           {(err || (submitted && s.error)) && <p className="text-sm text-red">{err ?? s.error}</p>}
-          {submitted && s.status === "connecting" && <p className="text-sm text-fg2">Connecting…</p>}
+          {submitted && s.status === "connecting" && <p className="text-sm text-fg2">{t("Connecting…")}</p>}
 
           <Button type="submit" variant="primary" disabled={busy || (mode === "join" && (!address.trim() || key.trim().length < 8))} className="h-10">
-            {mode === "host" ? "Start server" : "Join"}
+            {mode === "create" ? t("Create server") : t("Join")}
           </Button>
         </form>
       </div>
