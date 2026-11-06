@@ -6,12 +6,21 @@ server is a tiny signaling process that runs inside the host's app.
 
 **Stack:** Electron · React 19 · TypeScript · Tailwind CSS 4 · WebRTC · `ws`
 
-## Run
+## Download
+
+Get **`Talkas-Setup-x.y.z.exe`** from the [latest release](https://github.com/reactmatz/Talkas-Live-chat-with-friends/releases/latest),
+run it and follow the wizard. Windows may warn that the app is unrecognized (it isn't code-signed yet):
+**More info → Run anyway**.
+
+## Run from source
 
 ```bash
 npm install
 npm run dev      # Vite (5180) + Electron with hot reload
-npm run dist     # installer for the current OS (electron-builder)
+npm run dist     # installer for the current OS (electron-builder) → release/
+
+# publish a new version on GitHub Releases
+git tag v0.1.1 && git push origin v0.1.1
 ```
 
 1. One friend clicks **Host a server** → gets an **invite code** (user-plus icon next to the server name).
