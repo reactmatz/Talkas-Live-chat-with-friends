@@ -27,6 +27,7 @@ interface NativeApi {
   host: { start(name: string, port?: number): Promise<HostInfo>; stop(): Promise<void>; info(): Promise<HostInfo> };
   playit: { status(): Promise<PlayitStatus>; start(): Promise<PlayitStatus>; check(address: string): Promise<{ ok: boolean; message: string }> };
   openExternal(url: string): Promise<void>;
+  resolveAddress(address: string): Promise<string>;
   screen: { sources(): Promise<ScreenSource[]>; select(id: string, audio: boolean): Promise<void> };
   window: { minimize(): void; maximize(): void; close(): void; isMaximized(): Promise<boolean>; onState(cb: (s: { maximized: boolean }) => void): () => void };
 }

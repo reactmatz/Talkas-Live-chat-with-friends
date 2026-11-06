@@ -88,7 +88,7 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
             <input
               value={tunnel}
               onChange={(e) => setTunnel(e.target.value)}
-              placeholder="name.tun.ply.gg:12345"
+              placeholder="name.tun.ply.gg or name.ply.gg:12345"
               spellCheck={false}
               className="h-10 rounded-md border border-line bg-canvas px-3 font-mono text-sm outline-none placeholder:text-muted focus:border-accent/60"
             />

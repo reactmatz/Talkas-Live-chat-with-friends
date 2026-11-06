@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { resolveSrv } from "node:dns/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -47,8 +48,26 @@ export async function startPlayit(): Promise<PlayitStatus> {
   return playitStatus();
 }
 
+/**
+ * playit "Minecraft Java" tunnels hand out a name without a port (name.tun.ply.gg): the real
+ * host:port lives in a DNS SRV record (_minecraft._tcp.<name>), like Minecraft clients look it up.
+ * Returns "host:port" when such a record exists, otherwise the address unchanged.
+ */
+export async function resolveAddress(address: string): Promise<string> {
+  const a = address.trim();
+  if (/^wss?:\/\//i.test(a) || /:\d+$/.test(a) || !/[a-z]/i.test(a)) return a;
+  try {
+    const [srv] = await resolveSrv(`_minecraft._tcp.${a}`);
+    if (srv) return `${srv.name}:${srv.port}`;
+  } catch {
+    // no SRV record: fall back to the default port
+  }
+  return a;
+}
+
 /** Opens a WebSocket to the public tunnel address to prove friends can reach this server. */
-export function checkTunnel(address: string, timeoutMs = 6000): Promise<{ ok: boolean; message: string }> {
+export async function checkTunnel(address: string, timeoutMs = 10000): Promise<{ ok: boolean; message: string }> {
+  address = await resolveAddress(address);
   return new Promise((resolve) => {
     let url: URL;
     try {
@@ -65,6 +84,6 @@ export function checkTunnel(address: string, timeoutMs = 6000): Promise<{ ok: bo
       resolve({ ok, message });
     };
     ws.once("open", () => done(true, "Reachable — friends can join through this address."));
-    ws.once("error", (e) => done(false, `Not reachable (${(e as NodeJS.ErrnoException).code ?? e.message}). Is the playit agent running and the tunnel's local port set to 4646?`));
+    ws.once("error", (e) => done(false, `Not reachable (${(e as NodeJS.ErrnoException).code ?? e.message}). Is the playit agent running and the tunnel's local address 127.0.0.1:4646?`));
   });
 }

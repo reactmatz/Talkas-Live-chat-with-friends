@@ -13,6 +13,7 @@ const api = {
     start: () => ipcRenderer.invoke("playit:start"),
     check: (address: string) => ipcRenderer.invoke("playit:check", address),
   },
+  resolveAddress: (address: string) => ipcRenderer.invoke("net:resolve", address),
   openExternal: (url: string) => ipcRenderer.invoke("open:external", url),
   screen: {
     sources: () => ipcRenderer.invoke("screen:sources"),
