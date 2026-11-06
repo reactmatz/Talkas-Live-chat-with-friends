@@ -4,11 +4,13 @@ import { DEFAULT_PORT } from "../shared/protocol";
 import { checkPublicAddress, QuickTunnel } from "./cloudflare";
 import { ServerStore } from "./servers";
 import { SignalingServer } from "./signaling";
+import { Updater } from "./updater";
 
 const DEV_URL = "http://localhost:5180";
 const signaling = new SignalingServer();
 const tunnel = new QuickTunnel(join(app.getPath("userData"), "bin"), (s) => win?.webContents.send("tunnel:state", s));
 let win: BrowserWindow | null = null;
+const updater = new Updater(() => win);
 let pendingSourceId: string | null = null; // chosen in the renderer's screen picker
 let pendingAudio = false;
 
@@ -39,9 +41,26 @@ function createWindow() {
     },
   });
   win.once("ready-to-show", () => win?.show());
+  // Pop-out windows belong to the main window: closing Talkas closes them too.
+  win.on("close", () => BrowserWindow.getAllWindows().forEach((w) => w !== win && w.destroy()));
   win.on("maximize", () => win?.webContents.send("window:state", { maximized: true }));
   win.on("unmaximize", () => win?.webContents.send("window:state", { maximized: false }));
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
+    // Popped-out camera/stream: a plain window the renderer fills itself, so it can live on another monitor.
+    if (url === "about:blank" && frameName.startsWith("talkas-pop-"))
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          width: 640,
+          height: 360,
+          minWidth: 200,
+          minHeight: 120,
+          autoHideMenuBar: true,
+          backgroundColor: "#0D0E11",
+          icon: app.isPackaged ? undefined : join(__dirname, "../../build/icon.png"),
+          webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
+        },
+      };
     if (/^https?:/.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
@@ -131,6 +150,11 @@ function setupIpc() {
   ipcMain.on("window:maximize", () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
   ipcMain.handle("window:isMaximized", () => win?.isMaximized() ?? false);
   ipcMain.on("window:close", () => win?.close());
+
+  ipcMain.handle("update:state", () => updater.state);
+  ipcMain.handle("update:check", () => updater.check());
+  ipcMain.handle("update:download", () => updater.download());
+  ipcMain.on("update:install", () => updater.install());
 }
 
 app.on("second-instance", () => {
@@ -142,6 +166,8 @@ app.whenReady().then(() => {
   setupPermissions();
   setupIpc();
   createWindow();
+  // Quiet check a few seconds after start; the title bar shows a button only if there is something new.
+  setTimeout(() => void updater.check(), 8_000);
 });
 
 app.on("before-quit", () => {

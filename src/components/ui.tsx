@@ -1,8 +1,9 @@
-import { Copy, Minus, Square, X, type LucideIcon } from "lucide-react";
+import { Copy, Download, Minus, RotateCw, Square, X, type LucideIcon } from "lucide-react";
 import { t } from "../lib/i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import logo from "../assets/talkas-symbol.svg";
 import { native } from "../lib/native";
+import { useUpdate } from "../lib/updates";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -103,6 +104,32 @@ export function Modal({ title, onClose, children, width = 560 }: { title: string
   );
 }
 
+/** Title-bar button that appears only when a new version exists (like Minehub's). */
+function UpdatePill() {
+  const u = useUpdate();
+  if (!u || !native) return null;
+  const pill = "mr-2 flex h-6 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold tracking-normal transition-colors";
+  if (u.state === "available")
+    return (
+      <button onDoubleClick={(e) => e.stopPropagation()} onClick={() => void native!.update.download()} className={cx(pill, "bg-accent text-canvas hover:bg-accent-soft")} title={t("Download Talkas {version}", { version: u.next })}>
+        <Download size={13} /> {t("Update to {version}", { version: u.next })}
+      </button>
+    );
+  if (u.state === "downloading")
+    return (
+      <span className={cx(pill, "bg-elevated text-fg2")}>
+        <Download size={13} /> {t("Downloading… {percent}%", { percent: u.percent })}
+      </span>
+    );
+  if (u.state === "ready")
+    return (
+      <button onDoubleClick={(e) => e.stopPropagation()} onClick={() => native!.update.install()} className={cx(pill, "bg-accent text-canvas hover:bg-accent-soft")}>
+        <RotateCw size={13} /> {t("Restart to update")}
+      </button>
+    );
+  return null;
+}
+
 /** Custom title bar for the frameless window, with standard Windows caption buttons. */
 export function TitleBar({ title }: { title: string }) {
   const [maximized, setMaximized] = useState(false);
@@ -116,6 +143,7 @@ export function TitleBar({ title }: { title: string }) {
     <div data-drag onDoubleClick={() => native?.window.maximize()} className="flex h-8 shrink-0 items-center bg-canvas pl-3 text-xs font-semibold tracking-wide text-muted">
       <img src={logo} alt="" className="mr-2 size-4" draggable={false} />
       <span className="flex-1">{title}</span>
+      <UpdatePill />
       {native && (
         <div className="flex h-full" onDoubleClick={(e) => e.stopPropagation()}>
           <button aria-label={t("Minimize")} title={t("Minimize")} onClick={() => native!.window.minimize()} className={cx(btn, "hover:bg-hover hover:text-fg")}>

@@ -181,7 +181,7 @@ export class PeerMesh {
     if (!t) return; // answerer before the offer arrived: attached when it does
     const track = this.local[slot];
     await t.sender.replaceTrack(track).catch((e) => console.warn("[mesh] replaceTrack", slot, e));
-    if (track && KIND[slot] === "video") await this.tune(t.sender, slot);
+    if (track && (KIND[slot] === "video" || slot === "screenAudio")) await this.tune(t.sender, slot);
   }
 
   /** Encoder settings: screen keeps its frame rate under pressure; camera is capped to stay light. */
@@ -189,7 +189,12 @@ export class PeerMesh {
     const params = sender.getParameters() as RTCRtpSendParameters & { degradationPreference?: string };
     if (!params.encodings?.length) params.encodings = [{}];
     const enc = params.encodings[0];
-    if (slot === "screen") {
+    if (slot === "screenAudio") {
+      // Without an explicit cap the browser keeps stream audio at a voice-call bitrate.
+      enc.maxBitrate = 256_000;
+      enc.priority = "high";
+      enc.networkPriority = "high";
+    } else if (slot === "screen") {
       const p = this.screenPreset;
       enc.maxBitrate = p.bitrate;
       enc.maxFramerate = p.fps;

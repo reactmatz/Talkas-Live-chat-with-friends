@@ -3,10 +3,10 @@
  *
  * Opus is configured per audio m-line (they are always in slot order: mic first, screen audio second):
  *  - mic:          mono, in-band FEC (survives packet loss), DTX (no packets while silent), 64 kbps cap
- *  - screen audio: stereo music-grade, FEC, no DTX, 160 kbps cap
+ *  - screen audio: stereo music-grade, FEC, no DTX, 256 kbps cap (full-band: keeps the bass and the highs)
  */
 const MIC = { useinbandfec: "1", usedtx: "1", stereo: "0", maxaveragebitrate: "64000", maxplaybackrate: "48000" };
-const SCREEN = { useinbandfec: "1", usedtx: "0", stereo: "1", "sprop-stereo": "1", maxaveragebitrate: "160000", maxplaybackrate: "48000" };
+const SCREEN = { useinbandfec: "1", usedtx: "0", stereo: "1", "sprop-stereo": "1", maxaveragebitrate: "256000", maxplaybackrate: "48000", cbr: "0" };
 
 export function tuneOpus(sdp: string): string {
   const [head, ...sections] = sdp.split(/\r\nm=/);

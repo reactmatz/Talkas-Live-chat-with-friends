@@ -1,4 +1,4 @@
-import { Check, Copy, Expand, Headphones, LogOut, MonitorUp, PhoneOff, VideoOff } from "lucide-react";
+import { Check, Copy, EyeOff, Expand, ExternalLink, Headphones, LogOut, MonitorUp, Move, PhoneOff, Pin, VideoOff } from "lucide-react";
 import { t } from "../lib/i18n";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { session, useSession } from "../lib/session";
@@ -12,11 +12,20 @@ export interface MenuTarget {
   stream: boolean; // opened on a screen-share tile
 }
 
+/** What can be done with the tile the menu was opened on (call stage only). */
+export interface TileActions {
+  floating: boolean;
+  pinned: boolean;
+  onFloat(): void;
+  onPin(): void;
+  onPopOut(): void;
+}
+
 /**
  * Right-click menu for a participant or a stream (Discord-style).
  * Rendered inside the element that opened it, so it also works on top of a fullscreen stage.
  */
-export function MemberMenu({ target, onClose, onFullscreen }: { target: MenuTarget; onClose: () => void; onFullscreen?: () => void }) {
+export function MemberMenu({ target, onClose, onFullscreen, tile }: { target: MenuTarget; onClose: () => void; onFullscreen?: () => void; tile?: TileActions }) {
   const s = useSession();
   const st = useSettings();
   const ref = useRef<HTMLDivElement>(null);
@@ -77,6 +86,16 @@ export function MemberMenu({ target, onClose, onFullscreen }: { target: MenuTarg
       {inMyRoom && <Toggle icon={VideoOff} label={t("Hide Non-Video Participants")} checked={st.hideNonVideo} onChange={(v) => settings.update({ hideNonVideo: v })} />}
       {target.stream && onFullscreen && <Item icon={Expand} label={t("Fullscreen")} onClick={run(onFullscreen)} />}
       {self && s.local.sharing && <Item icon={MonitorUp} label={t("Stop Streaming")} onClick={run(() => void session.stopShare())} />}
+      {self && <Toggle icon={EyeOff} label={t("Hide my camera for me")} checked={st.hideSelfView} onChange={(v) => settings.update({ hideSelfView: v })} />}
+
+      {tile && (
+        <>
+          <Separator />
+          <Toggle icon={Pin} label={t("Keep visible when idle")} checked={tile.pinned} onChange={() => tile.onPin()} />
+          <Toggle icon={Move} label={t("Free position (drag anywhere)")} checked={tile.floating} onChange={run(tile.onFloat)} />
+          <Item icon={ExternalLink} label={t("Open in new window")} onClick={run(tile.onPopOut)} />
+        </>
+      )}
 
       <Separator />
       <Item icon={Copy} label={t("Copy Name")} onClick={run(() => void navigator.clipboard.writeText(m.name))} />

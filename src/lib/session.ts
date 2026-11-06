@@ -7,6 +7,7 @@ import { settings } from "./settings";
 import { sounds } from "./sounds";
 import { SignalingClient, type SocketStatus } from "./signaling";
 import { SpeakingMonitor } from "./speaking";
+import { processMic, type ProcessedMic } from "./voice";
 
 export interface RemoteMedia {
   mic?: MediaStream;
@@ -64,7 +65,9 @@ class Session {
   private listeners = new Set<() => void>();
   private client: SignalingClient | null = null;
   private mesh: PeerMesh | null = null;
-  private mic: MediaStream | null = null;
+  private mic: MediaStream | null = null; // what we send (processed when voice isolation is on)
+  private rawMic: MediaStream | null = null; // straight from the device
+  private micChain: ProcessedMic | null = null;
   private iceServers: RTCIceServer[] = [];
   private inRoom = false; // the server confirmed we're in voiceChannel
   private speakingMonitor = new SpeakingMonitor((id, on) => this.set({ speaking: { ...this.state.speaking, [id]: on } }));
@@ -180,34 +183,51 @@ class Session {
   /** (Re)captures the microphone with the current device/processing settings and swaps it into every call. */
   async openMic() {
     const st = settings.get();
+    const isolating = st.isolation !== "off";
     const audio: MediaTrackConstraints = {
       deviceId: st.inputDevice ? { exact: st.inputDevice } : undefined,
       echoCancellation: st.echoCancellation,
-      noiseSuppression: st.noiseSuppression,
+      // With AI isolation on, Chromium's own suppressor would only fight it: let the network do it.
+      noiseSuppression: isolating ? false : st.noiseSuppression,
       autoGainControl: st.autoGainControl,
       channelCount: 1,
       sampleRate: 48_000,
     };
-    let next: MediaStream | null = null;
+    let raw: MediaStream | null = null;
     try {
-      next = await navigator.mediaDevices.getUserMedia({ audio });
+      raw = await navigator.mediaDevices.getUserMedia({ audio });
     } catch {
       try {
-        next = await navigator.mediaDevices.getUserMedia({ audio: { ...audio, deviceId: undefined } }); // device unplugged
+        raw = await navigator.mediaDevices.getUserMedia({ audio: { ...audio, deviceId: undefined } }); // device unplugged
       } catch {
         this.set({ error: t("Microphone blocked or not found. You joined listen-only.") });
       }
     }
-    const old = this.mic;
-    this.mic = next;
-    const track = next?.getAudioTracks()[0] ?? null;
+
+    let chain: ProcessedMic | null = null;
+    if (raw) {
+      try {
+        chain = await processMic(raw, { isolation: st.isolation, gate: st.gate, gateDb: st.gateDb });
+      } catch (e) {
+        console.warn("[voice] isolation unavailable, sending the raw mic", e);
+        chain = { stream: raw, dispose: () => undefined };
+      }
+    }
+
+    const oldRaw = this.rawMic;
+    const oldChain = this.micChain;
+    this.rawMic = raw;
+    this.micChain = chain;
+    this.mic = chain?.stream ?? null;
+    const track = this.mic?.getAudioTracks()[0] ?? null;
     if (track) {
       track.contentHint = "speech";
       track.enabled = !this.state.local.muted;
     }
     await this.mesh?.setTrack("mic", track);
-    old?.getTracks().forEach((t) => t.stop());
-    if (this.state.selfId) this.speakingMonitor.set(this.state.selfId, next);
+    oldChain?.dispose();
+    oldRaw?.getTracks().forEach((t) => t.stop());
+    if (this.state.selfId) this.speakingMonitor.set(this.state.selfId, this.mic);
   }
 
   /** Called by Settings when mic options change; only does work while in a call. */
@@ -254,18 +274,58 @@ class Session {
       this.setLocal({ camera: false });
       return;
     }
+    const cam = await this.openCamera();
+    if (!cam) return;
+    await this.mesh?.setTrack("camera", cam.getVideoTracks()[0]);
+    this.set({ localCamera: cam });
+    this.setLocal({ camera: true });
+  }
+
+  /** Settings → Camera changed: switch devices live if the camera is on. */
+  async applyCameraSettings() {
+    if (!this.state.localCamera) return;
+    const cam = await this.openCamera();
+    if (!cam) return;
+    await this.mesh?.setTrack("camera", cam.getVideoTracks()[0]);
+    this.state.localCamera.getTracks().forEach((t) => t.stop());
+    this.set({ localCamera: cam });
+  }
+
+  /**
+   * Uses exactly the camera picked in Settings. With "Default", prefers a real camera over virtual ones
+   * (Iriun, OBS, DroidCam…), which often show a placeholder when their companion app isn't running.
+   */
+  private async openCamera(): Promise<MediaStream | null> {
+    const shape = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+    let deviceId = settings.get().cameraDevice;
+    if (!deviceId) {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput" && d.deviceId);
+      const real = cams.find((d) => !/virtual|obs|iriun|droidcam|epoccam|ndi|snap camera|xsplit|manycam|camo|elgato/i.test(d.label));
+      deviceId = (real ?? cams[0])?.deviceId ?? "";
+    }
     try {
-      const deviceId = settings.get().cameraDevice;
-      const cam = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: deviceId ? { ideal: deviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      const cam = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId }, ...shape } : shape });
+      cam.getVideoTracks()[0].contentHint = "motion";
+      return cam;
+    } catch (e) {
+      const name = (e as DOMException)?.name;
+      if (name === "OverconstrainedError" || name === "NotFoundError") {
+        // picked camera unplugged: try any camera
+        try {
+          return await navigator.mediaDevices.getUserMedia({ video: shape });
+        } catch {
+          // fall through to the message below
+        }
+      }
+      this.set({
+        error:
+          name === "NotReadableError"
+            ? t("The camera is being used by another app (Camera, Teams, Zoom…). Close it and try again.")
+            : name === "NotAllowedError"
+              ? t("Camera access is blocked. Allow it in Windows Settings → Privacy → Camera.")
+              : t("Camera blocked or not found."),
       });
-      const track = cam.getVideoTracks()[0];
-      track.contentHint = "motion";
-      await this.mesh?.setTrack("camera", track);
-      this.set({ localCamera: cam });
-      this.setLocal({ camera: true });
-    } catch {
-      this.set({ error: t("Camera blocked or not found.") });
+      return null;
     }
   }
 
@@ -273,10 +333,18 @@ class Session {
     await this.stopShare();
     try {
       if (native && sourceId) await native.screen.select(sourceId, withAudio);
+      // Stream audio is music/game sound, not a voice: no echo cancel, noise suppression or AGC
+      // (they cut bass and pump the volume), and keep it stereo.
+      const musicAudio: MediaTrackConstraints = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2, sampleRate: 48_000 };
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: { ideal: preset.fps, max: preset.fps }, height: { ideal: preset.height, max: preset.height } },
-        audio: withAudio,
+        audio: withAudio ? musicAudio : false,
       });
+      const sound = stream.getAudioTracks()[0];
+      if (sound) {
+        sound.contentHint = "music";
+        await sound.applyConstraints(musicAudio).catch(() => {});
+      }
       const video = stream.getVideoTracks()[0];
       video.contentHint = preset.hint; // "motion" favors fps, "detail" favors sharp text
       await video.applyConstraints({ frameRate: { ideal: preset.fps, max: preset.fps }, height: { max: preset.height } }).catch(() => {});
@@ -373,7 +441,10 @@ class Session {
     this.state.localScreen?.getTracks().forEach((t) => t.stop());
     this.state.localCamera?.getTracks().forEach((t) => t.stop());
     if (stopMic) {
-      this.mic?.getTracks().forEach((t) => t.stop());
+      this.micChain?.dispose();
+      this.rawMic?.getTracks().forEach((t) => t.stop());
+      this.micChain = null;
+      this.rawMic = null;
       this.mic = null;
     }
     this.speakingMonitor.close();

@@ -29,6 +29,17 @@ const api = {
     sources: () => ipcRenderer.invoke("screen:sources"),
     select: (id: string, audio: boolean) => ipcRenderer.invoke("screen:select", id, audio),
   },
+  update: {
+    state: () => ipcRenderer.invoke("update:state"),
+    check: () => ipcRenderer.invoke("update:check"),
+    download: () => ipcRenderer.invoke("update:download"),
+    install: () => ipcRenderer.send("update:install"),
+    onState: (cb: (s: unknown) => void) => {
+      const h = (_: unknown, s: unknown) => cb(s);
+      ipcRenderer.on("update:state", h);
+      return () => ipcRenderer.removeListener("update:state", h);
+    },
+  },
   window: {
     minimize: () => ipcRenderer.send("window:minimize"),
     maximize: () => ipcRenderer.send("window:maximize"),

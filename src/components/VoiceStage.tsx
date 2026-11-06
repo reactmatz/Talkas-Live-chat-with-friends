@@ -1,15 +1,44 @@
 import { Headphones, HeadphoneOff, Maximize, Mic, MicOff, Minimize, MonitorUp, MonitorX, PhoneOff, Video, VideoOff, Volume2 } from "lucide-react";
 import { t } from "../lib/i18n";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Channel } from "../../shared/protocol";
 import { session, useSession } from "../lib/session";
 import { useSettings } from "../lib/settings";
-import { MemberMenu, type MenuTarget } from "./MemberMenu";
+import { MemberMenu, type MenuTarget, type TileActions } from "./MemberMenu";
+import { PopOut } from "./PopOut";
 import { useFullscreen } from "../lib/useFullscreen";
 import { useIdle } from "../lib/useIdle";
 import { Avatar, Button, cx } from "./ui";
 
 const IDLE_MS = 3_000;
+
+/** Free placement of a tile on the stage, as fractions of the stage size (survives window resizes). */
+interface Place {
+  x: number;
+  y: number;
+  w: number;
+}
+interface TileLayout {
+  float?: Place;
+  pinned?: boolean; // stays visible when the rest of the UI fades out
+}
+const LAYOUT_KEY = "talkas.tiles";
+// Remembered per person + kind (ids change every session, names don't).
+function loadLayouts(): Record<string, TileLayout> {
+  try {
+    return JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? "{}") as Record<string, TileLayout>;
+  } catch {
+    return {};
+  }
+}
+function saveLayouts(v: Record<string, TileLayout>) {
+  try {
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(v));
+  } catch {
+    // storage unavailable: layout just isn't remembered
+  }
+}
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 interface Tile {
   key: string;
@@ -32,7 +61,9 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
   const [focus, setFocus] = useState<string | null>(null);
   const [overToolbar, setOverToolbar] = useState(false);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
-  const { hideNonVideo } = useSettings();
+  const { hideNonVideo, hideSelfView } = useSettings();
+  const [layouts, setLayouts] = useState(loadLayouts);
+  const [popped, setPopped] = useState<string[]>([]);
   const inCall = s.voiceChannel === channel.id;
   const idle = useIdle(stage, IDLE_MS, inCall && !pickerOpen && !overToolbar && !menu);
 
@@ -50,13 +81,34 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
     return hideNonVideo && out.some((t) => t.stream) ? out.filter((t) => t.kind === "screen" || t.stream) : out;
   }, [s.voice, s.members, s.remote, s.localCamera, s.localScreen, s.selfId, channel.id, hideNonVideo]);
 
+  const layoutId = useCallback((t: Tile) => `${t.kind}:${s.members[t.memberId]?.name ?? t.memberId}`, [s.members]);
+  const layoutOf = (t: Tile) => layouts[layoutId(t)] ?? {};
+  const setLayout = (t: Tile, patch: Partial<TileLayout>) =>
+    setLayouts((all) => {
+      const next = { ...all, [layoutId(t)]: { ...all[layoutId(t)], ...patch } };
+      saveLayouts(next);
+      return next;
+    });
+
+  // Forget pop-outs whose tile is gone (camera off, stream ended, left the call).
+  useEffect(() => {
+    setPopped((p) => (p.every((k) => tiles.some((t) => t.key === k)) ? p : p.filter((k) => tiles.some((t) => t.key === k))));
+  }, [tiles]);
+
+  const [menuTile, setMenuTile] = useState<Tile | null>(null);
   const openMenu = (t: Tile) => (e: React.MouseEvent) => {
     e.preventDefault();
+    setMenuTile(t);
     setMenu({ x: e.clientX, y: e.clientY, memberId: t.memberId, stream: t.kind === "screen" });
   };
 
-  const focused = tiles.find((t) => t.key === focus) ?? null;
-  const others = focused ? tiles.filter((t) => t !== focused) : tiles;
+  const focused = tiles.find((t) => t.key === focus && !popped.includes(t.key)) ?? null;
+  // My own camera is hidden from thumbnails when "Hide my camera for me" is on (still shown when expanded).
+  const hiddenSelf = (t: Tile) => hideSelfView && t.self && t.kind === "user";
+  const placed = tiles.filter((t) => !popped.includes(t.key));
+  const floating = placed.filter((t) => t !== focused && layoutOf(t).float && !hiddenSelf(t));
+  const docked = placed.filter((t) => !floating.includes(t));
+  const others = (focused ? docked.filter((t) => t !== focused) : docked).filter((t) => !(focused && hiddenSelf(t)));
 
   // Drop focus (and leave fullscreen) when the focused stream ends.
   useEffect(() => {
@@ -115,9 +167,9 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
             <TileView tile={tile(focused)} big fullscreen={fullscreen.active} idle={idle} onClick={() => setFocus(null)} onContextMenu={openMenu(focused)} />
           </div>
           {others.length > 0 && (
-            <div className={cx("flex h-28 shrink-0 justify-center gap-2 transition-opacity", fullscreen.active && "absolute inset-x-0 bottom-24 z-10", chrome)}>
+            <div className={cx("pointer-events-none flex h-28 shrink-0 justify-center gap-2", fullscreen.active && "absolute inset-x-0 bottom-24 z-10")}>
               {others.map((t) => (
-                <div key={t.key} className="aspect-video h-full">
+                <div key={t.key} className={cx("pointer-events-auto aspect-video h-full transition-opacity", !layoutOf(t).pinned && chrome)}>
                   <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
                 </div>
               ))}
@@ -125,8 +177,8 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
           )}
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 content-center gap-2" style={{ gridTemplateColumns: `repeat(${cols(tiles.length)}, minmax(0, 1fr))` }}>
-          {tiles.map((t) => (
+        <div className="grid min-h-0 flex-1 content-center gap-2" style={{ gridTemplateColumns: `repeat(${cols(docked.length)}, minmax(0, 1fr))` }}>
+          {docked.map((t) => (
             <div key={t.key} className="aspect-video max-h-full min-h-0">
               <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
             </div>
@@ -134,10 +186,33 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
         </div>
       )}
 
+      {/* Floating tiles: anywhere on the stage, including the middle */}
+      {floating.map((t) => (
+        <FloatingTile key={t.key} stage={stage} place={layoutOf(t).float!} faded={!layoutOf(t).pinned && idle} onPlace={(float) => setLayout(t, { float })}>
+          <TileView tile={tile(t)} idle={idle && !layoutOf(t).pinned} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
+        </FloatingTile>
+      ))}
+
+      {/* Popped-out tiles: their own OS window (another monitor, for example) */}
+      {tiles
+        .filter((pt) => popped.includes(pt.key))
+        .map((pt) => {
+          const v = tile(pt);
+          return (
+            <PopOut key={pt.key} id={pt.key} title={pt.kind === "screen" ? t("{name}'s screen", { name: v.name }) : `${v.name} — Talkas`} onClosed={() => setPopped((p) => p.filter((k) => k !== pt.key))}>
+              <TileView tile={v} big fullscreen idle={false} onClick={() => undefined} onContextMenu={(e) => e.preventDefault()} />
+            </PopOut>
+          );
+        })}
+
       {menu && (
         <MemberMenu
           target={menu}
-          onClose={() => setMenu(null)}
+          tile={menuTile ? tileActions(menuTile) : undefined}
+          onClose={() => {
+            setMenu(null);
+            setMenuTile(null);
+          }}
           onFullscreen={() => {
             setFocus(`s-${menu.memberId}`);
             fullscreen.enter();
@@ -163,6 +238,20 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
       </div>
     </section>
   );
+
+  function tileActions(t: Tile): TileActions {
+    const l = layoutOf(t);
+    return {
+      floating: !!l.float,
+      pinned: !!l.pinned,
+      onFloat: () => setLayout(t, { float: l.float ? undefined : { x: 0.62, y: 0.5, w: 0.3 } }),
+      onPin: () => setLayout(t, { pinned: !l.pinned }),
+      onPopOut: () => {
+        if (focus === t.key) setFocus(null);
+        setPopped((p) => (p.includes(t.key) ? p : [...p, t.key]));
+      },
+    };
+  }
 
   function tile(t: Tile) {
     const m = s.members[t.memberId];
@@ -195,8 +284,9 @@ function TileView({
       style={!tile.stream && !isScreen && tile.banner ? { background: tile.banner } : undefined}
       onDoubleClick={(e) => {
         e.stopPropagation();
-        if (document.fullscreenElement) void document.exitFullscreen();
-        else (e.currentTarget.closest("section") as HTMLElement | null)?.requestFullscreen().catch(() => {});
+        const doc = e.currentTarget.ownerDocument; // the main window or a pop-out window
+        if (doc.fullscreenElement) void doc.exitFullscreen();
+        else ((e.currentTarget.closest("section, [data-pop]") as HTMLElement | null) ?? e.currentTarget).requestFullscreen().catch(() => {});
       }}
       className={cx(
         "group relative flex h-full w-full cursor-pointer items-center justify-center overflow-hidden bg-panel transition-shadow",
@@ -219,6 +309,70 @@ function TileView({
       {isScreen && !big && (
         <span className="absolute inset-0 flex items-center justify-center bg-void/40 text-sm font-semibold opacity-0 transition-opacity group-hover:opacity-100">{t("Watch stream")}</span>
       )}
+    </div>
+  );
+}
+
+/** A tile placed freely on the stage: drag to move, corner handle to resize. */
+function FloatingTile({ stage, place, faded, onPlace, children }: { stage: React.RefObject<HTMLElement | null>; place: Place; faded: boolean; onPlace: (p: Place) => void; children: ReactNode }) {
+  const [live, setLive] = useState<Place | null>(null); // while dragging: local, saved on release
+  const moved = useRef(false);
+  const p = live ?? place;
+
+  const start = (mode: "move" | "resize") => (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const box = stage.current?.getBoundingClientRect();
+    if (!box) return;
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    moved.current = false;
+    const from = { px: e.clientX, py: e.clientY, ...place };
+    let cur = place;
+    const aspect = box.width / box.height; // tile is 16:9, so its height fraction depends on the stage shape
+    const move = (ev: PointerEvent) => {
+      const dx = (ev.clientX - from.px) / box.width;
+      const dy = (ev.clientY - from.py) / box.height;
+      if (Math.abs(ev.clientX - from.px) + Math.abs(ev.clientY - from.py) > 4) moved.current = true;
+      if (mode === "move") {
+        const h = ((from.w * aspect) * 9) / 16;
+        cur = { w: from.w, x: clamp(from.x + dx, 0, 1 - from.w), y: clamp(from.y + dy, 0, Math.max(0, 1 - h)) };
+      } else {
+        const w = clamp(from.w + dx, 0.12, 1 - from.x);
+        cur = { x: from.x, y: from.y, w };
+      }
+      setLive(cur);
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      setLive(null);
+      if (moved.current) onPlace({ x: cur.x, y: cur.y, w: cur.w });
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  };
+
+  return (
+    <div
+      onPointerDown={start("move")}
+      onClickCapture={(e) => {
+        if (moved.current) {
+          e.stopPropagation(); // a drag is not a click
+          moved.current = false;
+        }
+      }}
+      className={cx("group/float absolute z-10 aspect-video touch-none rounded-xl shadow-2xl transition-opacity", live ? "cursor-grabbing" : "cursor-grab", faded ? "pointer-events-none opacity-0 duration-500" : "opacity-100 duration-75")}
+      style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: `${p.w * 100}%` }}
+    >
+      {children}
+      <div
+        onPointerDown={start("resize")}
+        title={t("Resize")}
+        className="absolute right-0 bottom-0 size-4 cursor-nwse-resize rounded-br-xl border-r-2 border-b-2 border-fg/60 opacity-0 transition-opacity group-hover/float:opacity-100"
+      />
     </div>
   );
 }

@@ -33,6 +33,15 @@ export type TunnelState =
   | { state: "on"; url: string }
   | { state: "error"; message: string };
 
+export type UpdateState =
+  | { state: "idle"; version: string }
+  | { state: "checking"; version: string }
+  | { state: "none"; version: string }
+  | { state: "available"; version: string; next: string }
+  | { state: "downloading"; version: string; next: string; percent: number }
+  | { state: "ready"; version: string; next: string }
+  | { state: "error"; version: string; message: string };
+
 interface NativeApi {
   platform: string;
   host: { start(serverId: string, port?: number): Promise<HostInfo>; stop(): Promise<void>; info(): Promise<HostInfo> };
@@ -50,6 +59,7 @@ interface NativeApi {
     onState(cb: (s: TunnelState) => void): () => void;
   };
   screen: { sources(): Promise<ScreenSource[]>; select(id: string, audio: boolean): Promise<void> };
+  update: { state(): Promise<UpdateState>; check(): Promise<UpdateState>; download(): Promise<void>; install(): void; onState(cb: (s: UpdateState) => void): () => void };
   window: { minimize(): void; maximize(): void; close(): void; isMaximized(): Promise<boolean>; onState(cb: (s: { maximized: boolean }) => void): () => void };
 }
 

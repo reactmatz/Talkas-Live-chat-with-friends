@@ -14,6 +14,14 @@
   "build": {
     "appId": "dev.reactmatz.talkas",
     "productName": "Talkas",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "reactmatz",
+        "repo": "Talkas-Live-chat-with-friends",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "dist/**",
       "dist-electron/**",
@@ -43,6 +51,8 @@
     }
   },
   "dependencies": {
+    "@sapphi-red/web-noise-suppressor": "^0.4.1",
+    "electron-updater": "^6.8.11",
     "lucide-react": "^1.70.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

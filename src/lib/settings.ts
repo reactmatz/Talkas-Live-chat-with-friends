@@ -19,6 +19,9 @@ export interface Settings {
   echoCancellation: boolean;
   noiseSuppression: boolean;
   autoGainControl: boolean;
+  isolation: "off" | "standard" | "strong"; // AI noise suppression (RNNoise / GTCRN)
+  gate: boolean; // noise gate: closes the mic between words
+  gateDb: number;
   defaultPreset: string;
   // sounds
   sounds: { join: boolean; leave: boolean; mute: boolean; message: boolean };
@@ -26,6 +29,7 @@ export interface Settings {
   zoom: number; // 0.8 .. 1.3
   compactChat: boolean;
   hideNonVideo: boolean;
+  hideSelfView: boolean; // don't show my own camera in thumbnails (only when expanded)
   // advanced / hosting
   publicStun: boolean;
   // per member (keyed by display name, ids change every session)
@@ -42,11 +46,15 @@ const defaults: Settings = {
   echoCancellation: true,
   noiseSuppression: true,
   autoGainControl: true,
+  isolation: "standard",
+  gate: true,
+  gateDb: -50,
   defaultPreset: "1080p60",
   sounds: { join: true, leave: true, mute: true, message: false },
   zoom: 1,
   compactChat: false,
   hideNonVideo: false,
+  hideSelfView: false,
   publicStun: true,
   peers: {},
 };

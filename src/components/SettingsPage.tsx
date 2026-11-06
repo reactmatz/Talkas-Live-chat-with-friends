@@ -6,6 +6,9 @@ import { SCREEN_PRESETS } from "../lib/mesh";
 import { session, useSession } from "../lib/session";
 import { settings, useSettings } from "../lib/settings";
 import { sounds } from "../lib/sounds";
+import { processMic } from "../lib/voice";
+import { native } from "../lib/native";
+import { DOWNLOAD_PAGE, updateErrorText, useUpdate } from "../lib/updates";
 import { Avatar, Button, cx } from "./ui";
 
 type SectionId = "profile" | "voice" | "sounds" | "appearance" | "language" | "advanced";
@@ -282,7 +285,7 @@ function VoiceSection() {
   const st = useSettings();
   const devices = useDevices();
   const list = (kind: MediaDeviceKind) => [
-    { value: "", label: t("Default") },
+    { value: "", label: kind === "videoinput" ? t("Default (prefers a real camera)") : t("Default") },
     ...devices.filter((d) => d.kind === kind && d.deviceId !== "default" && d.deviceId).map((d, i) => ({ value: d.deviceId, label: d.label || t("Device {n}", { n: i + 1 }) })),
   ];
   const audio = (patch: Partial<typeof st>) => {
@@ -303,16 +306,58 @@ function VoiceSection() {
       </div>
       <MicTest />
 
-      <div className="mt-6 divide-y divide-line border-t border-line">
+      <div className="mt-6 flex flex-col gap-2 border-t border-line pt-5">
+        <span className="text-[13px] font-semibold">{t("Voice isolation")}</span>
+        <div className="grid grid-cols-3 gap-2">
+          {(
+            [
+              ["off", t("Off"), t("Raw microphone")],
+              ["standard", t("Standard"), t("AI removes keyboard, clicks and fans")],
+              ["strong", t("Strong"), t("Stronger AI for noisy rooms (more CPU)")],
+            ] as const
+          ).map(([id, label, hint]) => (
+            <button
+              key={id}
+              onClick={() => audio({ isolation: id })}
+              className={cx("flex flex-col items-start rounded-lg border p-3 text-left", st.isolation === id ? "border-accent bg-accent/10" : "border-line hover:border-faint")}
+            >
+              <span className="text-sm font-semibold">{label}</span>
+              <span className="text-xs text-muted">{hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 divide-y divide-line border-t border-line">
+        <Switch
+          label={t("Noise gate")}
+          hint={t("Closes your mic between words, so short clicks and taps aren't sent. Set the sensitivity with the green marker in the test above.")}
+          checked={st.gate}
+          onChange={(v) => audio({ gate: v })}
+        />
+        {st.gate && (
+          <Field label={t("Input sensitivity · {value} dB", { value: st.gateDb })}>
+            <input type="range" min={-80} max={-20} step={1} value={st.gateDb} onChange={(e) => settings.update({ gateDb: Number(e.target.value) })} onPointerUp={() => void session.applyAudioSettings()} className="accent-[#10b981]" />
+          </Field>
+        )}
         <Switch label={t("Echo cancellation")} hint={t("Removes your speakers' sound from your mic.")} checked={st.echoCancellation} onChange={(v) => audio({ echoCancellation: v })} />
-        <Switch label={t("Noise suppression")} hint={t("Filters keyboard, fans and background noise.")} checked={st.noiseSuppression} onChange={(v) => audio({ noiseSuppression: v })} />
+        {st.isolation === "off" && (
+          <Switch label={t("Noise suppression")} hint={t("Filters keyboard, fans and background noise.")} checked={st.noiseSuppression} onChange={(v) => audio({ noiseSuppression: v })} />
+        )}
         <Switch label={t("Automatic gain control")} hint={t("Keeps your volume steady when you move away from the mic.")} checked={st.autoGainControl} onChange={(v) => audio({ autoGainControl: v })} />
       </div>
 
       <h3 className="mt-8 mb-4 border-t border-line pt-6 text-[15px] font-semibold">{t("Video & streaming")}</h3>
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label={t("Camera")} hint={t("Used the next time you turn on video.")}>
-          <Select value={st.cameraDevice} onChange={(v) => settings.update({ cameraDevice: v })} options={list("videoinput")} />
+        <Field label={t("Camera")} hint={t("Switches right away if your camera is on.")}>
+          <Select
+            value={st.cameraDevice}
+            onChange={(v) => {
+              settings.update({ cameraDevice: v });
+              void session.applyCameraSettings();
+            }}
+            options={list("videoinput")}
+          />
         </Field>
         <Field label={t("Default stream quality")} hint={t("Pre-selected when you Go Live.")}>
           <Select value={st.defaultPreset} onChange={(v) => settings.update({ defaultPreset: v })} options={SCREEN_PRESETS.map((p) => ({ value: p.id, label: t(p.label) }))} />
@@ -322,37 +367,54 @@ function VoiceSection() {
   );
 }
 
-/** Opens the mic with the current settings and shows a live level meter. */
+/**
+ * Opens the mic with the current settings: the bar shows your input level, the green marker is the noise-gate
+ * threshold (sounds left of it are cut), and "Hear myself" plays back what friends will hear after isolation.
+ */
 function MicTest() {
   const st = useSettings();
-  const [level, setLevel] = useState<number | null>(null);
+  const [level, setLevel] = useState<number | null>(null); // dB
+  const [hear, setHear] = useState(false);
   const stop = useRef<(() => void) | null>(null);
+  const player = useRef<HTMLAudioElement>(null);
   useEffect(() => () => stop.current?.(), []);
 
   const start = async () => {
     stop.current?.();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: st.inputDevice ? { exact: st.inputDevice } : undefined, echoCancellation: st.echoCancellation, noiseSuppression: st.noiseSuppression, autoGainControl: st.autoGainControl },
+      const raw = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: st.inputDevice ? { exact: st.inputDevice } : undefined,
+          echoCancellation: st.echoCancellation,
+          noiseSuppression: st.isolation === "off" ? st.noiseSuppression : false,
+          autoGainControl: st.autoGainControl,
+        },
       });
+      const processed = await processMic(raw, { isolation: st.isolation, gate: st.gate, gateDb: st.gateDb }).catch(() => ({ stream: raw, dispose: () => undefined }));
+      if (player.current) player.current.srcObject = processed.stream;
       const ctx = new AudioContext();
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      ctx.createMediaStreamSource(stream).connect(analyser);
+      analyser.fftSize = 1024;
+      ctx.createMediaStreamSource(raw).connect(analyser);
       const buf = new Float32Array(analyser.fftSize);
       let raf = 0;
+      let smooth = -100;
       const tick = () => {
         analyser.getFloatTimeDomainData(buf);
         let sum = 0;
         for (const v of buf) sum += v * v;
-        setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 6));
+        const db = 20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-9);
+        smooth = Math.max(db, smooth - 1.5); // fast attack, slow release
+        setLevel(smooth);
         raf = requestAnimationFrame(tick);
       };
       tick();
       stop.current = () => {
         cancelAnimationFrame(raf);
-        stream.getTracks().forEach((t) => t.stop());
+        processed.dispose();
+        raw.getTracks().forEach((t) => t.stop());
         void ctx.close();
+        if (player.current) player.current.srcObject = null;
         setLevel(null);
         stop.current = null;
       };
@@ -361,15 +423,26 @@ function MicTest() {
     }
   };
 
+  const pct = (db: number) => Math.max(0, Math.min(100, ((db + 80) / 80) * 100));
+  const open = level !== null && (!st.gate || level >= st.gateDb);
+
   return (
-    <div className="mt-5 flex items-center gap-4 rounded-lg border border-line bg-canvas p-4">
-      <Button variant={level === null ? "primary" : "secondary"} onClick={() => (level === null ? void start() : stop.current?.())}>
-        {level === null ? t("Let's Check") : t("Stop Testing")}
-      </Button>
-      <div className="flex h-3 flex-1 overflow-hidden rounded-full bg-elevated">
-        <div className="h-full rounded-full bg-accent transition-[width] duration-75" style={{ width: `${(level ?? 0) * 100}%` }} />
+    <div className="mt-5 flex flex-col gap-3 rounded-lg border border-line bg-canvas p-4">
+      <div className="flex items-center gap-4">
+        <Button variant={level === null ? "primary" : "secondary"} onClick={() => (level === null ? void start() : stop.current?.())}>
+          {level === null ? t("Let's Check") : t("Stop Testing")}
+        </Button>
+        <div className="relative flex h-3 flex-1 overflow-hidden rounded-full bg-elevated">
+          <div className={cx("h-full rounded-full transition-[width] duration-75", open ? "bg-accent" : "bg-faint")} style={{ width: `${pct(level ?? -100)}%` }} />
+          {st.gate && <div className="absolute top-0 h-full w-1 rounded bg-accent-soft" style={{ left: `calc(${pct(st.gateDb)}% - 2px)` }} title={t("Noise gate")} />}
+        </div>
+        <span className="w-40 text-xs text-muted">{level === null ? t("Say something to test your mic.") : open ? t("Talk — the bar should move.") : t("Below the gate: not sent")}</span>
       </div>
-      <span className="w-40 text-xs text-muted">{level === null ? t("Say something to test your mic.") : t("Talk — the bar should move.")}</span>
+      <label className="flex cursor-pointer items-center gap-2 text-xs text-fg2">
+        <input type="checkbox" checked={hear} onChange={(e) => setHear(e.target.checked)} className="accent-[#10b981]" />
+        {t("Hear myself (use headphones) — this is what friends hear")}
+      </label>
+      <audio ref={player} autoPlay muted={!hear} />
     </div>
   );
 }
@@ -421,6 +494,7 @@ function AppearanceSection() {
       </div>
       <div className="mt-4 border-t border-line pt-2">
         <Switch label={t("Hide non-video participants")} hint={t("In a call, show only cameras and streams when there are any.")} checked={st.hideNonVideo} onChange={(v) => settings.update({ hideNonVideo: v })} />
+        <Switch label={t("Hide my camera for me")} hint={t("Your camera isn't shown in thumbnails, only when you expand it. Friends still see it.")} checked={st.hideSelfView} onChange={(v) => settings.update({ hideSelfView: v })} />
       </div>
     </>
   );
@@ -490,7 +564,59 @@ function AdvancedSection() {
           {confirm ? t("Click again to reset") : t("Reset")}
         </Button>
       </div>
-      <p className="mt-6 text-xs text-muted">Talkas {version}</p>
+      <UpdatesRow version={version} />
     </>
+  );
+}
+
+/** Settings → Advanced: current version and a manual "Check for updates" button. */
+function UpdatesRow({ version }: { version: string }) {
+  const u = useUpdate();
+  const busy = u?.state === "checking" || u?.state === "downloading";
+  const status =
+    !u || u.state === "idle"
+      ? null
+      : u.state === "checking"
+        ? t("Checking…")
+        : u.state === "none"
+          ? t("You're on the latest version.")
+          : u.state === "available"
+            ? t("Version {version} is available.", { version: u.next })
+            : u.state === "downloading"
+              ? t("Downloading… {percent}%", { percent: u.percent })
+              : u.state === "ready"
+                ? t("Version {version} is ready. Restart to finish.", { version: u.next })
+                : updateErrorText(u.message);
+  return (
+    <div className="mt-6 flex items-center gap-3 border-t border-line pt-6">
+      <div className="flex-1">
+        <div className="text-[15px]">{t("Updates")}</div>
+        <div className="text-xs text-muted">
+          Talkas {u?.version ?? version}
+          {status && <> · {status}</>}
+          {u?.state === "error" && (
+            <>
+              {" "}
+              <a href={DOWNLOAD_PAGE} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                {t("Open download page")}
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+      {u?.state === "available" ? (
+        <Button variant="primary" onClick={() => void native?.update.download()}>
+          {t("Download update")}
+        </Button>
+      ) : u?.state === "ready" ? (
+        <Button variant="primary" onClick={() => native?.update.install()}>
+          {t("Restart to update")}
+        </Button>
+      ) : (
+        <Button variant="secondary" disabled={!native || busy} onClick={() => void native?.update.check()}>
+          {t("Check for updates")}
+        </Button>
+      )}
+    </div>
   );
 }
