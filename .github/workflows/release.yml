@@ -22,7 +22,13 @@ jobs:
       - name: Use the tag as the app version
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
-        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          if ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not a version like v1.2.3 (three numbers)."
+            exit 1
+          fi
+          npm version "$v" --no-git-tag-version --allow-same-version
       - name: Build installer
         run: npm run dist -- --win nsis --publish never
         env:
@@ -33,5 +39,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/*.exe release/*.blockmap release/latest.yml \
-            --title "Talkas $GITHUB_REF_NAME" --generate-notes
+          files=(release/*.exe release/*.blockmap release/latest.yml)
+          # Release already created on github.com (Draft a new release → Publish)? Just attach the files.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "Talkas $GITHUB_REF_NAME" --generate-notes
+          fi
