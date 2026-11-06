@@ -37,7 +37,6 @@ export interface ConnectOptions {
   profile: Profile;
   publicStun: boolean;
   hostToken?: string; // only when connecting to the server this PC is hosting
-  resolved?: boolean;
 }
 
 const initial: SessionState = {
@@ -78,16 +77,6 @@ class Session {
   // ------------------------------------------------------------------ connection
 
   connect(o: ConnectOptions) {
-    // "name.tun.ply.gg" without a port: look up its SRV record first (playit Minecraft-type tunnels).
-    if (native && !o.resolved && /[a-z]/i.test(o.address) && !/:\d+\s*$/.test(o.address) && !/^wss?:\/\//i.test(o.address.trim())) {
-      this.disconnect();
-      this.set({ status: "connecting" });
-      void native.resolveAddress(o.address).then(
-        (address) => this.connect({ ...o, address, resolved: true }),
-        () => this.connect({ ...o, resolved: true }),
-      );
-      return;
-    }
     this.disconnect();
     // STUN only discovers each peer's public address for NAT traversal; no media goes through it.
     this.iceServers = o.publicStun ? [{ urls: ["stun:stun.l.google.com:19302", "stun:stun.cloudflare.com:3478"] }] : [];

@@ -38,10 +38,10 @@ the only server is a tiny signaling/presence process that runs *inside the host'
 
 1. **Host starts a server.** The host's main process opens `ws://0.0.0.0:4646/signal` and creates an
    8-char invite key. The host's own renderer connects to `127.0.0.1` like any guest.
-2. **Guests join.** They type the host's address (LAN IP, port-forwarded IP, or a playit.gg TCP tunnel —
-   `electron/playit.ts` checks the agent and tests the tunnel) and the invite key, or paste `address#KEY`.
-   The host's own window also sends a secret host token (never by IP: through a tunnel every guest
-   arrives from 127.0.0.1). First message: `hello {key, name, hue}`. Wrong key → close `4003`.
+2. **Guests join.** They paste an invite: a LAN address (`192.168.x.x:4646#KEY`) or an internet link
+   (`wss://….trycloudflare.com#KEY`) created by `electron/cloudflare.ts` — a Cloudflare Quick Tunnel that
+   forwards the WebSocket to the host without exposing its IP. The host's own window also sends a secret
+   host token (never by IP: through the tunnel every guest arrives from 127.0.0.1). First message: `hello {key, name, hue}`. Wrong key → close `4003`.
 3. **Welcome.** The server answers with `welcome {selfId, server, members, voice, history}` and broadcasts
    `member_join`. Text chat goes through this socket and is stored on the host (last 200 per channel).
 4. **Join a voice room.** The client captures the mic (`echoCancellation`, `noiseSuppression`,

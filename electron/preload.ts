@@ -8,13 +8,17 @@ const api = {
     stop: () => ipcRenderer.invoke("host:stop"),
     info: () => ipcRenderer.invoke("host:info"),
   },
-  playit: {
-    status: () => ipcRenderer.invoke("playit:status"),
-    start: () => ipcRenderer.invoke("playit:start"),
-    check: (address: string) => ipcRenderer.invoke("playit:check", address),
+  tunnel: {
+    state: () => ipcRenderer.invoke("tunnel:state"),
+    start: () => ipcRenderer.invoke("tunnel:start"),
+    stop: () => ipcRenderer.invoke("tunnel:stop"),
+    check: (address: string) => ipcRenderer.invoke("tunnel:check", address),
+    onState: (cb: (s: unknown) => void) => {
+      const h = (_: unknown, s: unknown) => cb(s);
+      ipcRenderer.on("tunnel:state", h);
+      return () => ipcRenderer.removeListener("tunnel:state", h);
+    },
   },
-  resolveAddress: (address: string) => ipcRenderer.invoke("net:resolve", address),
-  openExternal: (url: string) => ipcRenderer.invoke("open:external", url),
   screen: {
     sources: () => ipcRenderer.invoke("screen:sources"),
     select: (id: string, audio: boolean) => ipcRenderer.invoke("screen:select", id, audio),

@@ -148,7 +148,7 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
             <label className="flex flex-col gap-1.5">
               <span className="text-[11px] font-bold tracking-wider text-muted uppercase">Server name</span>
               <input className={field} value={serverName} onChange={(e) => setServerName(e.target.value)} maxLength={40} />
-              <span className="text-xs text-muted">Runs on this PC (port {DEFAULT_PORT}). Invite friends on the same Wi-Fi or through your playit.gg tunnel.</span>
+              <span className="text-xs text-muted">Runs on this PC (port {DEFAULT_PORT}). Invite friends on the same Wi-Fi or with an internet link.</span>
             </label>
           ) : (
             <>
@@ -164,7 +164,7 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
                       setKey(inv.key);
                     } else setAddress(e.target.value);
                   }}
-                  placeholder={`name.tun.ply.gg:12345 or 192.168.0.10:${DEFAULT_PORT}`}
+                  placeholder={`wss://….trycloudflare.com or 192.168.0.10:${DEFAULT_PORT}`}
                 />
                 <span className="text-xs text-muted">Paste the whole invite (address#CODE) and the code fills in by itself.</span>
               </label>

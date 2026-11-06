@@ -167,7 +167,7 @@ export class SignalingServer {
         }
         clearTimeout(helloTimeout);
         id = randomUUID().slice(0, 8);
-        // Not by IP: through a tunnel (playit.gg) every guest also arrives from 127.0.0.1.
+        // Not by IP: through the internet tunnel every guest also arrives from 127.0.0.1.
         const host = this.secretEquals(msg.hostToken, this.info.hostToken) && ![...this.clients.values()].some((c) => c.member.host);
         const member: Member = { id, host, ...cleanProfile(msg), state: { ...NO_MEDIA } };
         this.clients.set(id, { socket, member, alive: true, tokens: RATE_PER_SECOND });

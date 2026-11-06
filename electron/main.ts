@@ -1,11 +1,12 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell } from "electron";
 import { join } from "node:path";
 import { DEFAULT_PORT } from "../shared/protocol";
-import { checkTunnel, playitStatus, resolveAddress, startPlayit } from "./playit";
+import { checkPublicAddress, QuickTunnel } from "./cloudflare";
 import { SignalingServer } from "./signaling";
 
 const DEV_URL = "http://localhost:5180";
 const signaling = new SignalingServer();
+const tunnel = new QuickTunnel(join(app.getPath("userData"), "bin"), (s) => win?.webContents.send("tunnel:state", s));
 let win: BrowserWindow | null = null;
 let pendingSourceId: string | null = null; // chosen in the renderer's screen picker
 let pendingAudio = false;
@@ -76,16 +77,19 @@ function setupIpc() {
       dataDir: join(app.getPath("userData"), "host"),
     }),
   );
-  ipcMain.handle("host:stop", () => signaling.stop());
+  ipcMain.handle("host:stop", () => {
+    tunnel.stop();
+    return signaling.stop();
+  });
   ipcMain.handle("host:info", () => signaling.getInfo());
 
-  ipcMain.handle("playit:status", () => playitStatus());
-  ipcMain.handle("playit:start", () => startPlayit());
-  ipcMain.handle("net:resolve", (_e, address: string) => resolveAddress(String(address ?? "")));
-  ipcMain.handle("playit:check", (_e, address: string) => checkTunnel(String(address ?? "")));
-  ipcMain.handle("open:external", (_e, url: string) => {
-    if (/^https:\/\/(playit\.gg|github\.com)\//.test(String(url))) void shell.openExternal(url);
+  ipcMain.handle("tunnel:state", () => tunnel.state);
+  ipcMain.handle("tunnel:start", () => {
+    const info = signaling.getInfo();
+    return info.running ? tunnel.start(info.port) : { state: "error", message: "Start hosting first." };
   });
+  ipcMain.handle("tunnel:stop", () => tunnel.stop());
+  ipcMain.handle("tunnel:check", (_e, address: string) => checkPublicAddress(String(address ?? "")));
 
   ipcMain.handle("screen:sources", async () => {
     const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 320, height: 180 }, fetchWindowIcons: true });
@@ -119,5 +123,8 @@ app.whenReady().then(() => {
   createWindow();
 });
 
-app.on("before-quit", () => void signaling.stop());
+app.on("before-quit", () => {
+  tunnel.stop();
+  void signaling.stop();
+});
 app.on("window-all-closed", () => app.quit());

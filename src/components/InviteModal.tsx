@@ -1,42 +1,24 @@
-import { Check, CircleAlert, Copy, Globe, Loader2, Play, Wifi } from "lucide-react";
+import { Check, CircleAlert, Copy, Globe, Link2, Loader2, Square, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
-import { native, type HostInfo, type PlayitStatus } from "../lib/native";
-import { settings, useSettings } from "../lib/settings";
-import { Button, Modal, cx } from "./ui";
-
-const PLAYIT_DOWNLOAD = "https://playit.gg/download";
+import { native, type HostInfo, type TunnelState } from "../lib/native";
+import { Button, Modal } from "./ui";
 
 /**
- * Invite friends. Two ways in, both kept:
- *  - Internet: the playit.gg tunnel address (forwards to this PC's port), checked live from here.
+ * Invite friends. Two ways in:
+ *  - Internet: a Cloudflare link (wss://….trycloudflare.com) created on demand — no account, no router setup,
+ *    and friends never see this PC's IP during the handshake.
  *  - Same Wi-Fi: direct LAN IP + port.
  * Either way the invite code is required, and voice/video connect peer to peer afterwards.
  */
 export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => void }) {
-  const st = useSettings();
   const [copied, setCopied] = useState<string | null>(null);
-  const [tunnel, setTunnel] = useState(st.tunnelAddress);
-  const [agent, setAgent] = useState<PlayitStatus | null>(null);
-  const [check, setCheck] = useState<{ ok: boolean; message: string } | "checking" | null>(null);
-
-  const cleanTunnel = tunnel.trim().replace(/^wss?:\/\//, "").replace(/\/.*$/, "");
-  const invite = cleanTunnel ? `${cleanTunnel}#${host.inviteKey}` : "";
+  const [tunnel, setTunnel] = useState<TunnelState>({ state: "off" });
 
   useEffect(() => {
-    void native?.playit.status().then(setAgent);
+    if (!native) return;
+    void native.tunnel.state().then(setTunnel);
+    return native.tunnel.onState(setTunnel);
   }, []);
-
-  // Save the address and test it (debounced while typing).
-  useEffect(() => {
-    if (cleanTunnel === st.tunnelAddress && check) return;
-    const t = setTimeout(() => {
-      settings.update({ tunnelAddress: cleanTunnel });
-      if (!cleanTunnel || !native) return setCheck(null);
-      setCheck("checking");
-      void native.playit.check(cleanTunnel).then(setCheck);
-    }, 700);
-    return () => clearTimeout(t);
-  }, [cleanTunnel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const copy = (v: string) =>
     void navigator.clipboard.writeText(v).then(() => {
@@ -52,59 +34,60 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
     </button>
   );
 
+  const invite = tunnel.state === "on" ? `${tunnel.url}#${host.inviteKey}` : "";
+  const busy = tunnel.state === "downloading" || tunnel.state === "starting";
+
   return (
     <Modal title={`Invite friends to ${host.name}`} onClose={onClose} width={540}>
       <div className="flex flex-col gap-5 p-5">
         <Row label="Invite code" value={host.inviteKey} />
 
-        {/* Internet — playit.gg */}
+        {/* Internet — Cloudflare quick tunnel */}
         <section className="flex flex-col gap-3 rounded-lg border border-line p-4">
           <div className="flex items-center gap-2">
             <Globe size={16} className="text-accent" />
-            <span className="flex-1 text-sm font-semibold">Over the internet · playit.gg</span>
-            {agent && (
-              <span className={cx("flex items-center gap-1.5 text-xs", agent.running ? "text-accent" : "text-amber")}>
-                <span className={cx("size-2 rounded-full", agent.running ? "bg-accent" : "bg-amber")} />
-                {agent.running ? "Agent running" : agent.installed ? "Agent stopped" : "Agent not installed"}
+            <span className="flex-1 text-sm font-semibold">Over the internet · link</span>
+            {tunnel.state === "on" && (
+              <span className="flex items-center gap-1.5 text-xs text-accent">
+                <span className="size-2 rounded-full bg-accent" /> Online
               </span>
             )}
           </div>
 
-          {agent && !agent.running && (
-            <div className="flex items-center gap-2">
-              {agent.installed ? (
-                <Button onClick={() => void native!.playit.start().then(setAgent)}>
-                  <Play size={14} /> Start playit
+          {tunnel.state === "on" ? (
+            <>
+              <Row label="Invite" value={invite} />
+              <div className="flex items-center gap-2 text-xs text-accent">
+                <Check size={14} /> Reachable — send this invite to your friends. They paste it into “Join a friend”.
+              </div>
+              <div>
+                <Button variant="ghost" onClick={() => void native?.tunnel.stop()}>
+                  <Square size={13} /> Stop link
                 </Button>
-              ) : (
-                <Button onClick={() => void native!.openExternal(PLAYIT_DOWNLOAD)}>Download playit</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <Button variant="primary" disabled={busy || !native} onClick={() => void native?.tunnel.start()}>
+                  {busy ? <Loader2 size={15} className="animate-spin" /> : <Link2 size={15} />}
+                  {tunnel.state === "downloading" ? `Downloading… ${tunnel.percent}%` : tunnel.state === "starting" ? "Creating link…" : "Create internet link"}
+                </Button>
+                <span className="text-xs text-muted">Free, no account, no router setup.</span>
+              </div>
+              {tunnel.state === "error" && (
+                <div className="flex items-start gap-2 text-xs text-amber">
+                  <CircleAlert size={14} className="shrink-0" />
+                  <span>{tunnel.message}</span>
+                </div>
               )}
-              <span className="text-xs text-muted">The agent must run on this PC for the tunnel to work.</span>
-            </div>
+            </>
           )}
 
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs text-fg2">Tunnel address (from playit.gg → Tunnels)</span>
-            <input
-              value={tunnel}
-              onChange={(e) => setTunnel(e.target.value)}
-              placeholder="name.tun.ply.gg or name.ply.gg:12345"
-              spellCheck={false}
-              className="h-10 rounded-md border border-line bg-canvas px-3 font-mono text-sm outline-none placeholder:text-muted focus:border-accent/60"
-            />
-          </label>
-
-          {check && (
-            <div className={cx("flex items-start gap-2 text-xs", check === "checking" ? "text-fg2" : check.ok ? "text-accent" : "text-amber")}>
-              {check === "checking" ? <Loader2 size={14} className="animate-spin" /> : check.ok ? <Check size={14} /> : <CircleAlert size={14} className="shrink-0" />}
-              <span>{check === "checking" ? "Testing the tunnel…" : check.message}</span>
-            </div>
-          )}
-
-          {invite && <Row label="Invite" value={invite} />}
           <p className="text-xs leading-relaxed text-muted">
-            In playit.gg create a <b className="text-fg2">TCP</b> tunnel whose local address is <span className="font-mono text-fg2">127.0.0.1:{host.port}</span>. Friends paste the invite into
-            “Join a friend”. Only the handshake uses the tunnel — voice and video connect directly.
+            Uses a Cloudflare tunnel: friends reach your server through a <span className="font-mono text-fg2">trycloudflare.com</span> address and never see your IP during the
+            handshake. The first time, Talkas downloads Cloudflare's <span className="font-mono text-fg2">cloudflared</span>. The link changes every time you start hosting. Voice and
+            video still connect directly between PCs.
           </p>
         </section>
 
@@ -115,10 +98,9 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
             <span className="text-sm font-semibold">Same Wi-Fi · direct IP</span>
           </div>
           {host.addresses.length === 0 && <p className="text-xs text-muted">No network adapter found.</p>}
-          {host.addresses.map((a) => {
-            const addr = a.replace(/^ws:\/\//, "");
-            return <Row key={a} label="LAN address" value={addr} />;
-          })}
+          {host.addresses.map((a) => (
+            <Row key={a} label="LAN address" value={`${a.replace(/^ws:\/\//, "")}#${host.inviteKey}`} />
+          ))}
         </section>
       </div>
     </Modal>

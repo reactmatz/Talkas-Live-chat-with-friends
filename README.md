@@ -29,16 +29,16 @@ git tag v0.1.1 && git push origin v0.1.1
 4. Click a live stream to watch it fullscreen. The cursor and controls hide after 3 s; move the mouse to
    bring them back. `F` toggles fullscreen.
 
-### Over the internet with playit.gg
+### Over the internet (Cloudflare link)
 
-1. Install the [playit.gg agent](https://playit.gg/download) on the host PC and create a **TCP** tunnel whose
-   local address is `127.0.0.1:4646`.
-2. In Talkas: user-plus icon → **Invite friends** → paste the tunnel address (e.g. `name.tun.ply.gg:13157`).
-   Talkas shows whether the agent is running (and can start it) and tests the tunnel end to end.
-3. Copy the **Invite** (`address#CODE`). Friends paste it into **Join a friend**; the code fills in by itself.
+On the host: user-plus icon → **Invite friends** → **Create internet link**. Talkas downloads Cloudflare's
+official `cloudflared` the first time, opens a free Quick Tunnel and gives you an invite like
+`wss://some-words.trycloudflare.com#A1B2C3D4`. Friends paste it into **Join a friend**.
 
-Only the small signaling socket uses the tunnel — voice and video still connect peer to peer.
-Direct IP + code (same Wi-Fi or a forwarded port) keeps working as before.
+No account, no router setup, and friends never see your IP during the handshake. The link changes every
+time you start hosting. Voice and video still connect peer to peer.
+
+Same Wi-Fi: share the LAN invite (`192.168.x.x:4646#CODE`) instead.
 
 ## Architecture
 

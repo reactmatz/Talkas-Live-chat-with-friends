@@ -16,18 +16,23 @@ export interface HostInfo {
   addresses: string[];
 }
 
-export interface PlayitStatus {
-  installed: boolean;
-  running: boolean;
-  path: string | null;
-}
+export type TunnelState =
+  | { state: "off" }
+  | { state: "downloading"; percent: number }
+  | { state: "starting" }
+  | { state: "on"; url: string }
+  | { state: "error"; message: string };
 
 interface NativeApi {
   platform: string;
   host: { start(name: string, port?: number): Promise<HostInfo>; stop(): Promise<void>; info(): Promise<HostInfo> };
-  playit: { status(): Promise<PlayitStatus>; start(): Promise<PlayitStatus>; check(address: string): Promise<{ ok: boolean; message: string }> };
-  openExternal(url: string): Promise<void>;
-  resolveAddress(address: string): Promise<string>;
+  tunnel: {
+    state(): Promise<TunnelState>;
+    start(): Promise<TunnelState>;
+    stop(): Promise<void>;
+    check(address: string): Promise<{ ok: boolean; message: string }>;
+    onState(cb: (s: TunnelState) => void): () => void;
+  };
   screen: { sources(): Promise<ScreenSource[]>; select(id: string, audio: boolean): Promise<void> };
   window: { minimize(): void; maximize(): void; close(): void; isMaximized(): Promise<boolean>; onState(cb: (s: { maximized: boolean }) => void): () => void };
 }
