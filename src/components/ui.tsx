@@ -1,5 +1,6 @@
 import { Copy, Minus, Square, X, type LucideIcon } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import logo from "../assets/talkas-symbol.svg";
 import { native } from "../lib/native";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -112,6 +113,7 @@ export function TitleBar({ title }: { title: string }) {
   const btn = "flex h-8 w-[46px] items-center justify-center text-fg2 transition-colors";
   return (
     <div data-drag onDoubleClick={() => native?.window.maximize()} className="flex h-8 shrink-0 items-center bg-canvas pl-3 text-xs font-semibold tracking-wide text-muted">
+      <img src={logo} alt="" className="mr-2 size-4" draggable={false} />
       <span className="flex-1">{title}</span>
       {native && (
         <div className="flex h-full" onDoubleClick={(e) => e.stopPropagation()}>

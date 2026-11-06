@@ -1,4 +1,5 @@
-import { Globe, Radio, Server, Users, X } from "lucide-react";
+import { Globe, Server, Users, X } from "lucide-react";
+import logo from "../assets/talkas-symbol.svg";
 import { useEffect, useState } from "react";
 import { DEFAULT_PORT } from "../../shared/protocol";
 import { native, type HostInfo } from "../lib/native";
@@ -101,7 +102,7 @@ export function ConnectModal({ onHosted, onClose, initialMode }: { onHosted: (h:
         </button>
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 text-accent">
-            <Radio size={18} />
+            <img src={logo} alt="" className="size-6" draggable={false} />
             <span className="text-xs font-bold tracking-[0.14em] uppercase">Talkas</span>
           </div>
           <h1 className="text-[22px] font-bold tracking-tight">Talk, play and stream — peer to peer.</h1>

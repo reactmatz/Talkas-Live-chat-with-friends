@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import type { Channel } from "../shared/protocol";
 import { ConnectModal } from "./components/ConnectScreen";
 import { Button } from "./components/ui";
-import { Radio, Settings as Cog } from "lucide-react";
+import { Settings as Cog } from "lucide-react";
+import logo from "./assets/talkas-symbol.svg";
 import { InviteModal } from "./components/InviteModal";
 import { RemoteAudio } from "./components/RemoteAudio";
 import { ScreenPicker } from "./components/ScreenPicker";
@@ -69,7 +70,7 @@ export default function App() {
             onJoin={() => setConnect("host")}
           />
           <main className="flex flex-1 flex-col items-center justify-center gap-5 bg-panel p-8 text-center">
-            <Radio size={40} className="text-accent" />
+            <img src={logo} alt="" className="size-16" draggable={false} />
             <div>
               <h1 className="text-xl font-bold">You're not in a server</h1>
               <p className="mt-1 text-sm text-fg2">

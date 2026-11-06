@@ -25,6 +25,8 @@ function createWindow() {
     minHeight: 560,
     frame: false, // custom title bar; fullscreen stage is fully borderless
     backgroundColor: "#0D0E11",
+    // Packaged builds take the icon from the .exe (build/icon.ico); dev uses the PNG.
+    icon: app.isPackaged ? undefined : join(__dirname, "../../build/icon.png"),
     show: false,
     webPreferences: {
       preload: join(__dirname, "preload.js"),
