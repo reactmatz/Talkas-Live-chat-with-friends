@@ -3,6 +3,7 @@ import { useState } from "react";
 import { DEFAULT_PORT } from "../../shared/protocol";
 import { native, type HostInfo } from "../lib/native";
 import { session, useSession } from "../lib/session";
+import { settings } from "../lib/settings";
 import { Avatar, Button, cx } from "./ui";
 
 const STORE = "talkas.connect";
@@ -25,15 +26,21 @@ export function ConnectScreen({ onHosted }: { onHosted: (h: HostInfo) => void })
   const saved = load();
   const s = useSession();
   const [mode, setMode] = useState<"host" | "join">(native ? "host" : "join");
-  const [name, setName] = useState(saved.name ?? "");
-  const [hue] = useState(saved.hue ?? Math.floor(Math.random() * 360));
+  const st = settings.get();
+  const [name, setName] = useState(st.profile.name || saved.name || "");
+  const hue = st.profile.hue;
   const [serverName, setServerName] = useState(saved.serverName ?? "Game Night");
   const [address, setAddress] = useState(saved.address ?? "");
   const [key, setKey] = useState("");
-  const [stun, setStun] = useState(true);
+  const [stun, setStun] = useState(st.publicStun);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Name from this screen, everything else (bio, avatar, banner) from Settings → Profile.
+  const profile = () => {
+    settings.update((st) => ({ profile: { ...st.profile, name: nick, hue }, publicStun: stun }));
+    return settings.get().profile;
+  };
   const field = "h-10 w-full rounded-md border border-line bg-canvas px-3 text-sm outline-none placeholder:text-muted focus:border-accent/60";
   const nick = name.trim() || "Guest";
 
@@ -44,7 +51,7 @@ export function ConnectScreen({ onHosted }: { onHosted: (h: HostInfo) => void })
       const info = await native!.host.start(serverName.trim() || "My Server", DEFAULT_PORT);
       save({ name: nick, hue, serverName });
       onHosted(info);
-      session.connect({ address: `127.0.0.1:${info.port}`, key: info.inviteKey, name: nick, hue, publicStun: stun });
+      session.connect({ address: `127.0.0.1:${info.port}`, key: info.inviteKey, profile: profile(), publicStun: stun });
     } catch (e) {
       setErr(String((e as Error).message ?? e).includes("EADDRINUSE") ? `Port ${DEFAULT_PORT} is already in use.` : "Couldn't start the server.");
     } finally {
@@ -54,7 +61,7 @@ export function ConnectScreen({ onHosted }: { onHosted: (h: HostInfo) => void })
 
   const join = () => {
     save({ name: nick, hue, address });
-    session.connect({ address, key, name: nick, hue, publicStun: stun });
+    session.connect({ address, key, profile: profile(), publicStun: stun });
   };
 
   return (
@@ -99,7 +106,7 @@ export function ConnectScreen({ onHosted }: { onHosted: (h: HostInfo) => void })
           <label className="flex flex-col gap-1.5">
             <span className="text-[11px] font-bold tracking-wider text-muted uppercase">Display name</span>
             <div className="flex items-center gap-3">
-              <Avatar name={nick} hue={hue} size={40} />
+              <Avatar name={nick} hue={hue} size={40} src={st.profile.avatar} />
               <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="How friends see you" maxLength={32} autoFocus />
             </div>
           </label>

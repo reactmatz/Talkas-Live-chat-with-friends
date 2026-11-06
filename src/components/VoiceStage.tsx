@@ -2,6 +2,8 @@ import { Headphones, HeadphoneOff, Maximize, Mic, MicOff, Minimize, MonitorUp, M
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Channel } from "../../shared/protocol";
 import { session, useSession } from "../lib/session";
+import { useSettings } from "../lib/settings";
+import { MemberMenu, type MenuTarget } from "./MemberMenu";
 import { useFullscreen } from "../lib/useFullscreen";
 import { useIdle } from "../lib/useIdle";
 import { Avatar, Button, cx } from "./ui";
@@ -28,8 +30,10 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
   const fullscreen = useFullscreen(stage);
   const [focus, setFocus] = useState<string | null>(null);
   const [overToolbar, setOverToolbar] = useState(false);
+  const [menu, setMenu] = useState<MenuTarget | null>(null);
+  const { hideNonVideo } = useSettings();
   const inCall = s.voiceChannel === channel.id;
-  const idle = useIdle(stage, IDLE_MS, inCall && !pickerOpen && !overToolbar);
+  const idle = useIdle(stage, IDLE_MS, inCall && !pickerOpen && !overToolbar && !menu);
 
   const tiles = useMemo<Tile[]>(() => {
     const out: Tile[] = [];
@@ -41,8 +45,14 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
       out.push({ key: `u-${id}`, memberId: id, kind: "user", self, stream: m.state.camera ? (self ? s.localCamera : (r?.camera ?? null)) : null });
       if (m.state.sharing) out.push({ key: `s-${id}`, memberId: id, kind: "screen", self, stream: self ? s.localScreen : (r?.screen ?? null) });
     }
-    return out;
-  }, [s.voice, s.members, s.remote, s.localCamera, s.localScreen, s.selfId, channel.id]);
+    // "Hide Non-Video Participants" — only when there is at least one video to show.
+    return hideNonVideo && out.some((t) => t.stream) ? out.filter((t) => t.kind === "screen" || t.stream) : out;
+  }, [s.voice, s.members, s.remote, s.localCamera, s.localScreen, s.selfId, channel.id, hideNonVideo]);
+
+  const openMenu = (t: Tile) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, memberId: t.memberId, stream: t.kind === "screen" });
+  };
 
   const focused = tiles.find((t) => t.key === focus) ?? null;
   const others = focused ? tiles.filter((t) => t !== focused) : tiles;
@@ -101,13 +111,13 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
       {focused ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2">
           <div className="min-h-0 flex-1">
-            <TileView tile={tile(focused)} big fullscreen={fullscreen.active} idle={idle} onClick={() => setFocus(null)} />
+            <TileView tile={tile(focused)} big fullscreen={fullscreen.active} idle={idle} onClick={() => setFocus(null)} onContextMenu={openMenu(focused)} />
           </div>
           {others.length > 0 && (
             <div className={cx("flex h-28 shrink-0 justify-center gap-2 transition-opacity", fullscreen.active && "absolute inset-x-0 bottom-24 z-10", chrome)}>
               {others.map((t) => (
                 <div key={t.key} className="aspect-video h-full">
-                  <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} />
+                  <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
                 </div>
               ))}
             </div>
@@ -117,10 +127,21 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
         <div className="grid min-h-0 flex-1 content-center gap-2" style={{ gridTemplateColumns: `repeat(${cols(tiles.length)}, minmax(0, 1fr))` }}>
           {tiles.map((t) => (
             <div key={t.key} className="aspect-video max-h-full min-h-0">
-              <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} />
+              <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
             </div>
           ))}
         </div>
+      )}
+
+      {menu && (
+        <MemberMenu
+          target={menu}
+          onClose={() => setMenu(null)}
+          onFullscreen={() => {
+            setFocus(`s-${menu.memberId}`);
+            fullscreen.enter();
+          }}
+        />
       )}
 
       {/* Floating control bar */}
@@ -144,7 +165,7 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
 
   function tile(t: Tile) {
     const m = s.members[t.memberId];
-    return { ...t, name: m?.name ?? "?", hue: m?.hue ?? 0, muted: !!m?.state.muted, speaking: !!s.speaking[t.memberId] && !m?.state.muted };
+    return { ...t, name: m?.name ?? "?", hue: m?.hue ?? 0, avatar: m?.avatar ?? null, banner: m?.banner ?? null, muted: !!m?.state.muted, speaking: !!s.speaking[t.memberId] && !m?.state.muted };
   }
 }
 
@@ -156,17 +177,21 @@ function TileView({
   fullscreen = false,
   idle,
   onClick,
+  onContextMenu,
 }: {
-  tile: Tile & { name: string; hue: number; muted: boolean; speaking: boolean };
+  tile: Tile & { name: string; hue: number; avatar: string | null; banner: string | null; muted: boolean; speaking: boolean };
   big?: boolean;
   fullscreen?: boolean;
   idle: boolean;
   onClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const isScreen = tile.kind === "screen";
   return (
     <div
       onClick={onClick}
+      onContextMenu={onContextMenu}
+      style={!tile.stream && !isScreen && tile.banner ? { background: tile.banner } : undefined}
       onDoubleClick={(e) => {
         e.stopPropagation();
         if (document.fullscreenElement) void document.exitFullscreen();
@@ -183,7 +208,7 @@ function TileView({
       ) : isScreen ? (
         <span className="text-sm text-muted">Connecting to stream…</span>
       ) : (
-        <Avatar name={tile.name} hue={tile.hue} size={big ? 96 : 72} speaking={tile.speaking} />
+        <Avatar name={tile.name} hue={tile.hue} src={tile.avatar} size={big ? 96 : 72} speaking={tile.speaking} />
       )}
       <Label idle={idle}>
         {isScreen && <span className="rounded bg-red px-1 text-[10px] font-bold">LIVE</span>}

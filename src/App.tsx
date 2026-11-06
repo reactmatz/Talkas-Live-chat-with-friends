@@ -10,6 +10,8 @@ import { TitleBar } from "./components/ui";
 import { VoiceStage } from "./components/VoiceStage";
 import { native, type HostInfo } from "./lib/native";
 import { session, useSession } from "./lib/session";
+import { useSettings } from "./lib/settings";
+import { SettingsPage } from "./components/SettingsPage";
 
 export default function App() {
   const s = useSession();
@@ -17,6 +19,13 @@ export default function App() {
   const [channelId, setChannelId] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
   const [invite, setInvite] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const { zoom } = useSettings();
+
+  // Appearance → zoom level (Chromium CSS zoom scales the whole UI, including hit-testing).
+  useEffect(() => {
+    document.documentElement.style.zoom = String(zoom);
+  }, [zoom]);
 
   // Pick the first text channel once the server is known.
   useEffect(() => {
@@ -51,7 +60,7 @@ export default function App() {
       ) : (
         <div className="flex min-h-0 flex-1">
           <ServerRail onLeave={() => void leave()} />
-          <ChannelSidebar selected={channelId} onSelect={select} host={host} onInvite={() => setInvite(true)} onShare={() => setPicker(true)} />
+          <ChannelSidebar selected={channelId} onSelect={select} host={host} onInvite={() => setInvite(true)} onShare={() => setPicker(true)} onSettings={() => setShowSettings(true)} />
           <main className="flex min-w-0 flex-1 flex-col">
             {s.status !== "open" && <div className="bg-amber/15 px-4 py-1.5 text-center text-xs text-amber">Connection to the server lost — reconnecting…</div>}
             {channel?.kind === "text" && <TextChannel channel={channel} />}
@@ -61,6 +70,7 @@ export default function App() {
       )}
       <RemoteAudio />
       {picker && <ScreenPicker onClose={() => setPicker(false)} />}
+      {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
       {invite && host && <InviteModal host={host} onClose={() => setInvite(false)} />}
       {s.error && s.server && <div className="animate-pop fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-red/40 bg-panel px-4 py-2.5 text-sm shadow-xl">{s.error}</div>}
     </div>

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { SCREEN_PRESETS } from "../lib/mesh";
 import { native, type ScreenSource } from "../lib/native";
 import { session } from "../lib/session";
+import { settings } from "../lib/settings";
 import { Button, Modal, cx } from "./ui";
 
 /** Discord-style "Go Live" picker: source thumbnails, quality preset, optional system audio. */
@@ -10,7 +11,7 @@ export function ScreenPicker({ onClose }: { onClose: () => void }) {
   const [sources, setSources] = useState<ScreenSource[] | null>(null);
   const [tab, setTab] = useState<"screen" | "window">("screen");
   const [picked, setPicked] = useState<string | null>(null);
-  const [preset, setPreset] = useState(SCREEN_PRESETS[1].id);
+  const [preset, setPreset] = useState(settings.get().defaultPreset);
   const [audio, setAudio] = useState(true);
   const audioSupported = !native || native.platform === "win32";
 
@@ -24,7 +25,7 @@ export function ScreenPicker({ onClose }: { onClose: () => void }) {
 
   const list = (sources ?? []).filter((s) => s.kind === tab);
   const go = (id: string | null = picked) => {
-    void session.startShare(id, SCREEN_PRESETS.find((p) => p.id === preset)!, audio && audioSupported);
+    void session.startShare(id, SCREEN_PRESETS.find((p) => p.id === preset) ?? SCREEN_PRESETS[1], audio && audioSupported);
     onClose();
   };
 

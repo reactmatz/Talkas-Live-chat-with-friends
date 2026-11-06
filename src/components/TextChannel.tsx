@@ -2,10 +2,12 @@ import { Hash, SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Channel, ChatMessage } from "../../shared/protocol";
 import { session, useSession } from "../lib/session";
+import { useSettings } from "../lib/settings";
 import { Avatar } from "./ui";
 
 export function TextChannel({ channel }: { channel: Channel }) {
   const s = useSession();
+  const { compactChat: compact } = useSettings();
   const messages = s.history[channel.id] ?? [];
   const [draft, setDraft] = useState("");
   const end = useRef<HTMLDivElement>(null);
@@ -30,7 +32,7 @@ export function TextChannel({ channel }: { channel: Channel }) {
           </div>
         )}
         {messages.map((m, i) => (
-          <MessageRow key={m.id} m={m} grouped={isGrouped(messages[i - 1], m)} />
+          <MessageRow key={m.id} m={m} avatar={s.members[m.authorId]?.avatar} compact={compact} grouped={isGrouped(messages[i - 1], m)} />
         ))}
         <div ref={end} />
       </div>
@@ -55,8 +57,20 @@ export function TextChannel({ channel }: { channel: Channel }) {
 
 const isGrouped = (prev: ChatMessage | undefined, m: ChatMessage) => !!prev && prev.authorId === m.authorId && m.at - prev.at < 5 * 60_000;
 
-function MessageRow({ m, grouped }: { m: ChatMessage; grouped: boolean }) {
+function MessageRow({ m, grouped, avatar, compact }: { m: ChatMessage; grouped: boolean; avatar?: string | null; compact: boolean }) {
   const time = new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (compact)
+    return (
+      <div className="flex gap-2 rounded px-1 py-0.5 text-[14px] leading-relaxed hover:bg-hover/40">
+        <span className="w-11 shrink-0 text-[11px] leading-6 text-muted">{time}</span>
+        <p className="min-w-0 break-words whitespace-pre-wrap text-fg">
+          <span className="mr-1.5 font-semibold" style={{ color: `hsl(${m.authorHue} 60% 70%)` }}>
+            {m.authorName}
+          </span>
+          {m.text}
+        </p>
+      </div>
+    );
   if (grouped)
     return (
       <div className="group flex gap-4 rounded px-1 py-0.5 hover:bg-hover/40">
@@ -66,7 +80,7 @@ function MessageRow({ m, grouped }: { m: ChatMessage; grouped: boolean }) {
     );
   return (
     <div className="mt-3 flex gap-4 rounded px-1 py-0.5 hover:bg-hover/40">
-      <Avatar name={m.authorName} hue={m.authorHue} size={40} />
+      <Avatar name={m.authorName} hue={m.authorHue} src={avatar} size={40} />
       <div className="min-w-0">
         <div className="flex items-baseline gap-2">
           <span className="font-semibold" style={{ color: `hsl(${m.authorHue} 60% 70%)` }}>

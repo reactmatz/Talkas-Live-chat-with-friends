@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from "react";
-import { DEFAULT_PORT, NO_MEDIA, type ChatMessage, type MediaState, type Member, type ServerInfo } from "../../shared/protocol";
+import { DEFAULT_PORT, NO_MEDIA, type ChatMessage, type MediaState, type Member, type Profile, type ServerInfo } from "../../shared/protocol";
 import { PeerMesh, type ScreenPreset, type Slot } from "./mesh";
 import { native } from "./native";
+import { settings } from "./settings";
+import { sounds } from "./sounds";
 import { SignalingClient, type SocketStatus } from "./signaling";
 import { SpeakingMonitor } from "./speaking";
 
@@ -32,8 +34,7 @@ export interface SessionState {
 export interface ConnectOptions {
   address: string;
   key: string;
-  name: string;
-  hue: number;
+  profile: Profile;
   publicStun: boolean;
 }
 
@@ -63,6 +64,7 @@ class Session {
   private mesh: PeerMesh | null = null;
   private mic: MediaStream | null = null;
   private iceServers: RTCIceServer[] = [];
+  private inRoom = false; // the server confirmed we're in voiceChannel
   private speakingMonitor = new SpeakingMonitor((id, on) => this.set({ speaking: { ...this.state.speaking, [id]: on } }));
 
   subscribe = (fn: () => void) => {
@@ -84,7 +86,7 @@ class Session {
       this.set({ error: "That address doesn't look right. Use something like 192.168.0.10:4646." });
       return;
     }
-    const client = new SignalingClient(url, { t: "hello", key: o.key, name: o.name, hue: o.hue });
+    const client = new SignalingClient(url, { t: "hello", key: o.key, ...o.profile });
     this.client = client;
     this.set({ ...initial, status: "connecting" });
     client.onStatus((status) => {
@@ -121,19 +123,22 @@ class Session {
           this.set({ members, remote });
           return;
         }
+        case "member_profile":
+          this.set({ members: { ...this.state.members, [m.member.id]: m.member } });
+          return;
         case "member_state": {
           const member = this.state.members[m.id];
           if (member) this.set({ members: { ...this.state.members, [m.id]: { ...member, state: m.state } } });
           return;
         }
         case "voice":
-          this.set({ voice: m.voice });
-          this.syncMesh();
+          this.onVoice(m.voice);
           return;
         case "signal":
           void this.mesh?.handleSignal(m.from, m.data).catch((e) => console.warn("[signal]", e));
           return;
         case "chat": {
+          if (m.message.authorId !== this.state.selfId) sounds.message();
           const list = [...(this.state.history[m.message.channelId] ?? []), m.message];
           this.set({ history: { ...this.state.history, [m.message.channelId]: list } });
           return;
@@ -158,25 +163,61 @@ class Session {
 
   async joinVoice(channelId: string) {
     if (this.state.voiceChannel === channelId) return;
-    try {
-      this.mic ??= await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48_000 },
-      });
-    } catch {
-      this.set({ error: "Microphone blocked or not found. You joined listen-only." });
-    }
-    const micTrack = this.mic?.getAudioTracks()[0] ?? null;
-    if (micTrack) {
-      micTrack.contentHint = "speech";
-      micTrack.enabled = !this.state.local.muted;
-    }
-    await this.mesh?.setTrack("mic", micTrack);
-    if (this.state.selfId) this.speakingMonitor.set(this.state.selfId, this.mic);
+    this.inRoom = false;
+    if (!this.mic) await this.openMic();
     this.set({ voiceChannel: channelId });
     this.client?.send({ t: "join_voice", channelId });
   }
 
+  /** (Re)captures the microphone with the current device/processing settings and swaps it into every call. */
+  async openMic() {
+    const st = settings.get();
+    const audio: MediaTrackConstraints = {
+      deviceId: st.inputDevice ? { exact: st.inputDevice } : undefined,
+      echoCancellation: st.echoCancellation,
+      noiseSuppression: st.noiseSuppression,
+      autoGainControl: st.autoGainControl,
+      channelCount: 1,
+      sampleRate: 48_000,
+    };
+    let next: MediaStream | null = null;
+    try {
+      next = await navigator.mediaDevices.getUserMedia({ audio });
+    } catch {
+      try {
+        next = await navigator.mediaDevices.getUserMedia({ audio: { ...audio, deviceId: undefined } }); // device unplugged
+      } catch {
+        this.set({ error: "Microphone blocked or not found. You joined listen-only." });
+      }
+    }
+    const old = this.mic;
+    this.mic = next;
+    const track = next?.getAudioTracks()[0] ?? null;
+    if (track) {
+      track.contentHint = "speech";
+      track.enabled = !this.state.local.muted;
+    }
+    await this.mesh?.setTrack("mic", track);
+    old?.getTracks().forEach((t) => t.stop());
+    if (this.state.selfId) this.speakingMonitor.set(this.state.selfId, next);
+  }
+
+  /** Called by Settings when mic options change; only does work while in a call. */
+  async applyAudioSettings() {
+    if (this.state.voiceChannel) await this.openMic();
+  }
+
+  updateProfile(profile: Profile) {
+    this.client?.send({ t: "profile", ...profile });
+  }
+
+  kickFromVoice(id: string) {
+    this.client?.send({ t: "kick_voice", id });
+  }
+
   leaveVoice() {
+    if (this.state.voiceChannel) sounds.leave();
+    this.inRoom = false;
     this.client?.send({ t: "leave_voice" });
     this.teardownMedia(true);
     this.set({ voiceChannel: null, remote: {} });
@@ -185,6 +226,7 @@ class Session {
   toggleMute() {
     const muted = !this.state.local.muted;
     this.mic?.getAudioTracks().forEach((t) => (t.enabled = !muted)); // sender stays; DTX sends almost nothing
+    sounds.mute(muted);
     this.setLocal({ muted, deafened: muted ? this.state.local.deafened : false });
   }
 
@@ -192,6 +234,7 @@ class Session {
     const deafened = !this.state.local.deafened;
     const muted = deafened ? true : this.state.local.muted;
     this.mic?.getAudioTracks().forEach((t) => (t.enabled = !muted));
+    sounds.mute(deafened);
     this.setLocal({ deafened, muted }); // <audio> elements read `deafened` and mute themselves
   }
 
@@ -204,7 +247,10 @@ class Session {
       return;
     }
     try {
-      const cam = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } });
+      const deviceId = settings.get().cameraDevice;
+      const cam = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: deviceId ? { ideal: deviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      });
       const track = cam.getVideoTracks()[0];
       track.contentHint = "motion";
       await this.mesh?.setTrack("camera", track);
@@ -260,6 +306,31 @@ class Session {
   }
 
   // ------------------------------------------------------------------ internals
+
+  private onVoice(voice: Record<string, string[]>) {
+    const self = this.state.selfId;
+    const ch = this.state.voiceChannel;
+    const before = ch ? (this.state.voice[ch] ?? []) : [];
+    const after = ch ? (voice[ch] ?? []) : [];
+    this.set({ voice });
+    if (ch && self) {
+      if (after.includes(self) && !this.inRoom) {
+        this.inRoom = true;
+        sounds.join();
+      } else if (this.inRoom && !after.includes(self)) {
+        // removed by the host (or the server restarted the room)
+        this.inRoom = false;
+        sounds.leave();
+        this.teardownMedia(true);
+        this.set({ voiceChannel: null, remote: {} });
+        return;
+      } else if (this.inRoom) {
+        if (after.some((id) => !before.includes(id))) sounds.join();
+        if (before.some((id) => !after.includes(id))) sounds.leave();
+      }
+    }
+    this.syncMesh();
+  }
 
   private syncMesh() {
     const ch = this.state.voiceChannel;

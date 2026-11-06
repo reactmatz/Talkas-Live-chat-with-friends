@@ -24,10 +24,17 @@ export interface MediaState {
   sharing: boolean;
 }
 
-export interface Member {
-  id: string;
+export interface Profile {
   name: string;
-  hue: number; // avatar color
+  hue: number; // avatar / name color
+  bio: string;
+  avatar: string | null; // small data:image URL (≤ 128 px), shared with everyone in the server
+  banner: string; // hex color
+}
+
+export interface Member extends Profile {
+  id: string;
+  host: boolean; // runs the server on their PC (can disconnect people from voice)
   state: MediaState;
 }
 
@@ -48,7 +55,9 @@ export type SignalData =
   | { restart: true };
 
 export type ClientMessage =
-  | { t: "hello"; key: string; name: string; hue: number }
+  | ({ t: "hello"; key: string } & Profile)
+  | ({ t: "profile" } & Profile)
+  | { t: "kick_voice"; id: string }
   | { t: "join_voice"; channelId: string }
   | { t: "leave_voice" }
   | { t: "state"; state: MediaState }
@@ -67,6 +76,7 @@ export type ServerMessage =
   | { t: "member_join"; member: Member }
   | { t: "member_leave"; id: string }
   | { t: "member_state"; id: string; state: MediaState }
+  | { t: "member_profile"; member: Member }
   | { t: "voice"; voice: Record<string, string[]> }
   | { t: "signal"; from: string; data: SignalData }
   | { t: "chat"; message: ChatMessage }
@@ -76,4 +86,6 @@ export const DEFAULT_PORT = 4646;
 export const SIGNAL_PATH = "/signal";
 export const MAX_MESSAGE_BYTES = 256 * 1024; // SDP + candidates stay far below this
 export const MAX_CHAT_LENGTH = 2000;
+export const MAX_AVATAR_CHARS = 120_000; // ~90 KB image as base64
+export const MAX_BIO_LENGTH = 190;
 export const NO_MEDIA: MediaState = { muted: false, deafened: false, camera: false, sharing: false };

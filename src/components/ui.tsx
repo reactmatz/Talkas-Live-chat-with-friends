@@ -4,13 +4,13 @@ import { native } from "../lib/native";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
-export function Avatar({ name, hue, size = 32, speaking = false }: { name: string; hue: number; size?: number; speaking?: boolean }) {
+export function Avatar({ name, hue, src, size = 32, speaking = false }: { name: string; hue: number; src?: string | null; size?: number; speaking?: boolean }) {
   return (
     <div
-      className={cx("flex shrink-0 items-center justify-center rounded-full font-semibold text-fg transition-shadow duration-150", speaking && "ring-2 ring-accent ring-offset-2 ring-offset-panel")}
+      className={cx("flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold text-fg transition-shadow duration-150", speaking && "ring-2 ring-accent ring-offset-2 ring-offset-panel")}
       style={{ width: size, height: size, fontSize: size * 0.4, background: `hsl(${hue} 45% 38%)` }}
     >
-      {name.slice(0, 1).toUpperCase()}
+      {src ? <img src={src} alt="" draggable={false} className="h-full w-full object-cover" /> : name.slice(0, 1).toUpperCase()}
     </div>
   );
 }

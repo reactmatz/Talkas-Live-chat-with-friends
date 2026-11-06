@@ -1,7 +1,9 @@
-import { Camera, Hash, Headphones, HeadphoneOff, LogOut, Mic, MicOff, MonitorUp, PhoneOff, Plus, Signal, UserPlus, Video, Volume2 } from "lucide-react";
+import { Camera, Hash, Headphones, HeadphoneOff, LogOut, Mic, MicOff, MonitorUp, PhoneOff, Plus, Settings, Signal, UserPlus, Video, Volume2 } from "lucide-react";
+import { useState } from "react";
 import type { Channel } from "../../shared/protocol";
 import type { HostInfo } from "../lib/native";
 import { session, useSession } from "../lib/session";
+import { MemberMenu, type MenuTarget } from "./MemberMenu";
 import { Avatar, IconButton, cx } from "./ui";
 
 /** Far-left rail: the connected server, plus leave/join. */
@@ -35,8 +37,23 @@ export function ServerRail({ onLeave }: { onLeave: () => void }) {
 }
 
 /** Channel list, voice rooms with their members, voice panel and user footer. */
-export function ChannelSidebar({ selected, onSelect, host, onInvite, onShare }: { selected: string | null; onSelect: (c: Channel) => void; host: HostInfo | null; onInvite: () => void; onShare: () => void }) {
+export function ChannelSidebar({
+  selected,
+  onSelect,
+  host,
+  onInvite,
+  onShare,
+  onSettings,
+}: {
+  selected: string | null;
+  onSelect: (c: Channel) => void;
+  host: HostInfo | null;
+  onInvite: () => void;
+  onShare: () => void;
+  onSettings: () => void;
+}) {
   const s = useSession();
+  const [menu, setMenu] = useState<MenuTarget | null>(null);
   const me = s.selfId ? s.members[s.selfId] : null;
   const text = s.server?.channels.filter((c) => c.kind === "text") ?? [];
   const voice = s.server?.channels.filter((c) => c.kind === "voice") ?? [];
@@ -66,8 +83,15 @@ export function ChannelSidebar({ selected, onSelect, host, onInvite, onShare }: 
                     const m = s.members[id];
                     if (!m) return null;
                     return (
-                      <div key={id} className="flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-fg2 hover:bg-hover">
-                        <Avatar name={m.name} hue={m.hue} size={22} speaking={!!s.speaking[id] && !m.state.muted} />
+                      <div
+                        key={id}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setMenu({ x: e.clientX, y: e.clientY, memberId: id, stream: false });
+                        }}
+                        className="flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-fg2 hover:bg-hover"
+                      >
+                        <Avatar name={m.name} hue={m.hue} src={m.avatar} size={22} speaking={!!s.speaking[id] && !m.state.muted} />
                         <span className="flex-1 truncate">{m.name}</span>
                         {m.state.sharing && <span className="rounded bg-red px-1 text-[9px] font-bold text-fg">LIVE</span>}
                         {m.state.camera && <Video size={13} className="text-fg2" />}
@@ -110,15 +134,17 @@ export function ChannelSidebar({ selected, onSelect, host, onInvite, onShare }: 
 
       {me && (
         <footer className="flex items-center gap-2 bg-canvas/60 px-2 py-2">
-          <Avatar name={me.name} hue={me.hue} size={32} speaking={!!s.speaking[me.id] && !s.local.muted} />
+          <Avatar name={me.name} hue={me.hue} src={me.avatar} size={32} speaking={!!s.speaking[me.id] && !s.local.muted} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13px] font-semibold">{me.name}</div>
             <div className="text-[11px] text-muted">{host ? "Hosting" : "Online"}</div>
           </div>
           <IconButton icon={s.local.muted ? MicOff : Mic} label={s.local.muted ? "Unmute" : "Mute"} onClick={() => session.toggleMute()} className={s.local.muted ? "text-red" : ""} />
           <IconButton icon={s.local.deafened ? HeadphoneOff : Headphones} label={s.local.deafened ? "Undeafen" : "Deafen"} onClick={() => session.toggleDeafen()} className={s.local.deafened ? "text-red" : ""} />
+          <IconButton icon={Settings} label="User Settings" onClick={onSettings} />
         </footer>
       )}
+      {menu && <MemberMenu target={menu} onClose={() => setMenu(null)} />}
     </aside>
   );
 }

@@ -4,7 +4,10 @@ import { createServer, type Server } from "node:http";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
+import type { IncomingMessage } from "node:http";
 import {
+  MAX_AVATAR_CHARS,
+  MAX_BIO_LENGTH,
   MAX_CHAT_LENGTH,
   MAX_MESSAGE_BYTES,
   NO_MEDIA,
@@ -12,6 +15,7 @@ import {
   type ChatMessage,
   type ClientMessage,
   type Member,
+  type Profile,
   type ServerInfo,
   type ServerMessage,
 } from "../shared/protocol";
@@ -89,7 +93,7 @@ export class SignalingServer {
       res.end("Talkas signaling server");
     });
     this.wss = new WebSocketServer({ server: this.http, path: SIGNAL_PATH, maxPayload: MAX_MESSAGE_BYTES });
-    this.wss.on("connection", (socket) => this.onConnection(socket));
+    this.wss.on("connection", (socket, req) => this.onConnection(socket, req));
 
     await new Promise<void>((resolve, reject) => {
       this.http!.once("error", reject);
@@ -139,8 +143,10 @@ export class SignalingServer {
 
   // ------------------------------------------------------------------ connections
 
-  private onConnection(socket: WebSocket) {
+  private onConnection(socket: WebSocket, req: IncomingMessage) {
     let id: string | null = null;
+    // The host's own app connects over loopback; nobody else can.
+    const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
     const helloTimeout = setTimeout(() => socket.close(4001, "No hello"), 5_000);
 
     socket.on("pong", () => {
@@ -163,12 +169,8 @@ export class SignalingServer {
         }
         clearTimeout(helloTimeout);
         id = randomUUID().slice(0, 8);
-        const member: Member = {
-          id,
-          name: String(msg.name).trim().slice(0, 32) || "Guest",
-          hue: Math.abs(Number(msg.hue) || 0) % 360,
-          state: { ...NO_MEDIA },
-        };
+        const host = loopback && ![...this.clients.values()].some((c) => c.member.host);
+        const member: Member = { id, host, ...cleanProfile(msg), state: { ...NO_MEDIA } };
         this.clients.set(id, { socket, member, alive: true, tokens: RATE_PER_SECOND });
         send(socket, {
           t: "welcome",
@@ -209,6 +211,18 @@ export class SignalingServer {
         c.member.state = { ...NO_MEDIA, muted: c.member.state.muted, deafened: c.member.state.deafened };
         this.broadcast({ t: "voice", voice: this.voiceMap() });
         return;
+      case "profile":
+        Object.assign(c.member, cleanProfile(msg));
+        this.broadcast({ t: "member_profile", member: c.member });
+        return;
+      case "kick_voice": {
+        const target = this.clients.get(msg.id);
+        if (!c.member.host || !target || !this.roomOf(msg.id)) return;
+        this.leaveVoice(msg.id);
+        send(target.socket, { t: "error", message: "The host disconnected you from voice." });
+        this.broadcast({ t: "voice", voice: this.voiceMap() });
+        return;
+      }
       case "state":
         c.member.state = {
           muted: !!msg.state.muted,
@@ -297,6 +311,18 @@ export class SignalingServer {
       // history is a convenience; never crash the host over it
     }
   }
+}
+
+/** Never trust profile fields from the wire. */
+function cleanProfile(p: Partial<Profile>): Profile {
+  const avatar = typeof p.avatar === "string" && p.avatar.length <= MAX_AVATAR_CHARS && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(p.avatar) ? p.avatar : null;
+  return {
+    name: String(p.name ?? "").trim().slice(0, 32) || "Guest",
+    hue: Math.abs(Math.round(Number(p.hue) || 0)) % 360,
+    bio: String(p.bio ?? "").slice(0, MAX_BIO_LENGTH),
+    avatar,
+    banner: /^#[0-9a-f]{6}$/i.test(String(p.banner)) ? String(p.banner) : "#1b1e23",
+  };
 }
 
 function send(socket: WebSocket, msg: ServerMessage) {
