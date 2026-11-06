@@ -36,6 +36,7 @@ export interface ConnectOptions {
   key: string;
   profile: Profile;
   publicStun: boolean;
+  hostToken?: string; // only when connecting to the server this PC is hosting
 }
 
 const initial: SessionState = {
@@ -86,7 +87,7 @@ class Session {
       this.set({ error: "That address doesn't look right. Use something like 192.168.0.10:4646." });
       return;
     }
-    const client = new SignalingClient(url, { t: "hello", key: o.key, ...o.profile });
+    const client = new SignalingClient(url, { t: "hello", key: o.key, hostToken: o.hostToken, ...o.profile });
     this.client = client;
     this.set({ ...initial, status: "connecting" });
     client.onStatus((status) => {

@@ -1,5 +1,5 @@
-import { X, type LucideIcon } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { Copy, Minus, Square, X, type LucideIcon } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { native } from "../lib/native";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -101,16 +101,29 @@ export function Modal({ title, onClose, children, width = 560 }: { title: string
   );
 }
 
-/** Custom title bar for the frameless window. Window buttons on the right, Windows order. */
+/** Custom title bar for the frameless window, with standard Windows caption buttons. */
 export function TitleBar({ title }: { title: string }) {
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    if (!native) return;
+    void native.window.isMaximized().then(setMaximized);
+    return native.window.onState((s) => setMaximized(s.maximized));
+  }, []);
+  const btn = "flex h-8 w-[46px] items-center justify-center text-fg2 transition-colors";
   return (
-    <div data-drag className="flex h-8 shrink-0 items-center bg-canvas pl-3 text-xs font-semibold tracking-wide text-muted">
+    <div data-drag onDoubleClick={() => native?.window.maximize()} className="flex h-8 shrink-0 items-center bg-canvas pl-3 text-xs font-semibold tracking-wide text-muted">
       <span className="flex-1">{title}</span>
       {native && (
-        <div className="flex items-center gap-2 px-3">
-          <button aria-label="Minimize" onClick={() => native!.window.minimize()} className="size-3 rounded-full bg-amber/80 hover:bg-amber" />
-          <button aria-label="Maximize" onClick={() => native!.window.maximize()} className="size-3 rounded-full bg-accent/80 hover:bg-accent" />
-          <button aria-label="Close" onClick={() => native!.window.close()} className="size-3 rounded-full bg-red/80 hover:bg-red" />
+        <div className="flex h-full" onDoubleClick={(e) => e.stopPropagation()}>
+          <button aria-label="Minimize" title="Minimize" onClick={() => native!.window.minimize()} className={cx(btn, "hover:bg-hover hover:text-fg")}>
+            <Minus size={16} strokeWidth={1.5} />
+          </button>
+          <button aria-label={maximized ? "Restore" : "Maximize"} title={maximized ? "Restore Down" : "Maximize"} onClick={() => native!.window.maximize()} className={cx(btn, "hover:bg-hover hover:text-fg")}>
+            {maximized ? <Copy size={13} strokeWidth={1.5} className="-scale-x-100" /> : <Square size={13} strokeWidth={1.5} />}
+          </button>
+          <button aria-label="Close" title="Close" onClick={() => native!.window.close()} className={cx(btn, "hover:bg-[#c42b1c] hover:text-fg")}>
+            <X size={17} strokeWidth={1.5} />
+          </button>
         </div>
       )}
     </div>

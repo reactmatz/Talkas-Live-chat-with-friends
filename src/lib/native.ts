@@ -12,14 +12,23 @@ export interface HostInfo {
   name: string;
   port: number;
   inviteKey: string;
+  hostToken: string;
   addresses: string[];
+}
+
+export interface PlayitStatus {
+  installed: boolean;
+  running: boolean;
+  path: string | null;
 }
 
 interface NativeApi {
   platform: string;
   host: { start(name: string, port?: number): Promise<HostInfo>; stop(): Promise<void>; info(): Promise<HostInfo> };
+  playit: { status(): Promise<PlayitStatus>; start(): Promise<PlayitStatus>; check(address: string): Promise<{ ok: boolean; message: string }> };
+  openExternal(url: string): Promise<void>;
   screen: { sources(): Promise<ScreenSource[]>; select(id: string, audio: boolean): Promise<void> };
-  window: { minimize(): void; maximize(): void; close(): void; onState(cb: (s: { maximized: boolean }) => void): () => void };
+  window: { minimize(): void; maximize(): void; close(): void; isMaximized(): Promise<boolean>; onState(cb: (s: { maximized: boolean }) => void): () => void };
 }
 
 declare global {

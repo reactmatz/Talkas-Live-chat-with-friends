@@ -23,8 +23,9 @@ export interface Settings {
   zoom: number; // 0.8 .. 1.3
   compactChat: boolean;
   hideNonVideo: boolean;
-  // advanced
+  // advanced / hosting
   publicStun: boolean;
+  tunnelAddress: string; // playit.gg public address that forwards to this PC's signaling port
   // per member (keyed by display name, ids change every session)
   peers: Record<string, PeerAudio>;
 }
@@ -44,6 +45,7 @@ const defaults: Settings = {
   compactChat: false,
   hideNonVideo: false,
   publicStun: true,
+  tunnelAddress: "",
   peers: {},
 };
 

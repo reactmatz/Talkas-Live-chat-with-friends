@@ -8,6 +8,12 @@ const api = {
     stop: () => ipcRenderer.invoke("host:stop"),
     info: () => ipcRenderer.invoke("host:info"),
   },
+  playit: {
+    status: () => ipcRenderer.invoke("playit:status"),
+    start: () => ipcRenderer.invoke("playit:start"),
+    check: (address: string) => ipcRenderer.invoke("playit:check", address),
+  },
+  openExternal: (url: string) => ipcRenderer.invoke("open:external", url),
   screen: {
     sources: () => ipcRenderer.invoke("screen:sources"),
     select: (id: string, audio: boolean) => ipcRenderer.invoke("screen:select", id, audio),
@@ -16,6 +22,7 @@ const api = {
     minimize: () => ipcRenderer.send("window:minimize"),
     maximize: () => ipcRenderer.send("window:maximize"),
     close: () => ipcRenderer.send("window:close"),
+    isMaximized: () => ipcRenderer.invoke("window:isMaximized"),
     onState: (cb: (s: { maximized: boolean }) => void) => {
       const h = (_: unknown, s: { maximized: boolean }) => cb(s);
       ipcRenderer.on("window:state", h);

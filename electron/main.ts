@@ -1,6 +1,7 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell } from "electron";
 import { join } from "node:path";
 import { DEFAULT_PORT } from "../shared/protocol";
+import { checkTunnel, playitStatus, startPlayit } from "./playit";
 import { SignalingServer } from "./signaling";
 
 const DEV_URL = "http://localhost:5180";
@@ -76,6 +77,13 @@ function setupIpc() {
   ipcMain.handle("host:stop", () => signaling.stop());
   ipcMain.handle("host:info", () => signaling.getInfo());
 
+  ipcMain.handle("playit:status", () => playitStatus());
+  ipcMain.handle("playit:start", () => startPlayit());
+  ipcMain.handle("playit:check", (_e, address: string) => checkTunnel(String(address ?? "")));
+  ipcMain.handle("open:external", (_e, url: string) => {
+    if (/^https:\/\/(playit\.gg|github\.com)\//.test(String(url))) void shell.openExternal(url);
+  });
+
   ipcMain.handle("screen:sources", async () => {
     const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 320, height: 180 }, fetchWindowIcons: true });
     return sources.map((s) => ({
@@ -93,6 +101,7 @@ function setupIpc() {
 
   ipcMain.on("window:minimize", () => win?.minimize());
   ipcMain.on("window:maximize", () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
+  ipcMain.handle("window:isMaximized", () => win?.isMaximized() ?? false);
   ipcMain.on("window:close", () => win?.close());
 }
 

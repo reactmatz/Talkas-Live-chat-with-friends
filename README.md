@@ -20,8 +20,16 @@ npm run dist     # installer for the current OS (electron-builder)
 4. Click a live stream to watch it fullscreen. The cursor and controls hide after 3 s; move the mouse to
    bring them back. `F` toggles fullscreen.
 
-Over the internet: forward TCP 4646 on the host's router or use a TCP tunnel (e.g. playit.gg) and share
-that address. Keep "Allow calls over the internet" on (STUN for address discovery only).
+### Over the internet with playit.gg
+
+1. Install the [playit.gg agent](https://playit.gg/download) on the host PC and create a **TCP** tunnel whose
+   local address is `127.0.0.1:4646`.
+2. In Talkas: user-plus icon → **Invite friends** → paste the tunnel address (e.g. `name.tun.ply.gg:13157`).
+   Talkas shows whether the agent is running (and can start it) and tests the tunnel end to end.
+3. Copy the **Invite** (`address#CODE`). Friends paste it into **Join a friend**; the code fills in by itself.
+
+Only the small signaling socket uses the tunnel — voice and video still connect peer to peer.
+Direct IP + code (same Wi-Fi or a forwarded port) keeps working as before.
 
 ## Architecture
 

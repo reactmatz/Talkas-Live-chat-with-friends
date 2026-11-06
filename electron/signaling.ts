@@ -4,7 +4,6 @@ import { createServer, type Server } from "node:http";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
-import type { IncomingMessage } from "node:http";
 import {
   MAX_AVATAR_CHARS,
   MAX_BIO_LENGTH,
@@ -38,7 +37,8 @@ export interface HostInfo {
   name: string;
   port: number;
   inviteKey: string;
-  addresses: string[]; // ws://ip:port for LAN / tunnel use
+  hostToken: string; // secret, only given to the host's own window: marks it as host
+  addresses: string[]; // ws://ip:port for LAN use
 }
 
 const HISTORY_PER_CHANNEL = 200;
@@ -61,7 +61,7 @@ export class SignalingServer {
   private history: Record<string, ChatMessage[]> = {};
   private timers: NodeJS.Timeout[] = [];
   private saveTimer: NodeJS.Timeout | null = null;
-  private info: HostInfo = { running: false, name: "", port: 0, inviteKey: "", addresses: [] };
+  private info: HostInfo = { running: false, name: "", port: 0, inviteKey: "", hostToken: "", addresses: [] };
   private server: ServerInfo = { name: "", channels: [] };
   private historyFile = "";
 
@@ -93,7 +93,7 @@ export class SignalingServer {
       res.end("Talkas signaling server");
     });
     this.wss = new WebSocketServer({ server: this.http, path: SIGNAL_PATH, maxPayload: MAX_MESSAGE_BYTES });
-    this.wss.on("connection", (socket, req) => this.onConnection(socket, req));
+    this.wss.on("connection", (socket) => this.onConnection(socket));
 
     await new Promise<void>((resolve, reject) => {
       this.http!.once("error", reject);
@@ -119,7 +119,7 @@ export class SignalingServer {
       }, 1_000),
     );
 
-    this.info = { running: true, name: opts.name, port: opts.port, inviteKey, addresses: lanAddresses(opts.port) };
+    this.info = { running: true, name: opts.name, port: opts.port, inviteKey, hostToken: randomBytes(16).toString("hex"), addresses: lanAddresses(opts.port) };
     return this.info;
   }
 
@@ -134,7 +134,7 @@ export class SignalingServer {
     await new Promise<void>((r) => (this.http ? this.http.close(() => r()) : r()));
     this.wss = null;
     this.http = null;
-    this.info = { running: false, name: "", port: 0, inviteKey: "", addresses: [] };
+    this.info = { running: false, name: "", port: 0, inviteKey: "", hostToken: "", addresses: [] };
   }
 
   getInfo(): HostInfo {
@@ -143,10 +143,8 @@ export class SignalingServer {
 
   // ------------------------------------------------------------------ connections
 
-  private onConnection(socket: WebSocket, req: IncomingMessage) {
+  private onConnection(socket: WebSocket) {
     let id: string | null = null;
-    // The host's own app connects over loopback; nobody else can.
-    const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
     const helloTimeout = setTimeout(() => socket.close(4001, "No hello"), 5_000);
 
     socket.on("pong", () => {
@@ -169,7 +167,8 @@ export class SignalingServer {
         }
         clearTimeout(helloTimeout);
         id = randomUUID().slice(0, 8);
-        const host = loopback && ![...this.clients.values()].some((c) => c.member.host);
+        // Not by IP: through a tunnel (playit.gg) every guest also arrives from 127.0.0.1.
+        const host = this.secretEquals(msg.hostToken, this.info.hostToken) && ![...this.clients.values()].some((c) => c.member.host);
         const member: Member = { id, host, ...cleanProfile(msg), state: { ...NO_MEDIA } };
         this.clients.set(id, { socket, member, alive: true, tokens: RATE_PER_SECOND });
         send(socket, {
@@ -266,9 +265,13 @@ export class SignalingServer {
   // ------------------------------------------------------------------ helpers
 
   private validKey(key: unknown) {
-    const a = Buffer.from(String(key ?? "").trim().toUpperCase());
-    const b = Buffer.from(this.info.inviteKey);
-    return a.length === b.length && timingSafeEqual(a, b);
+    return this.secretEquals(String(key ?? "").trim().toUpperCase(), this.info.inviteKey);
+  }
+
+  private secretEquals(given: unknown, expected: string) {
+    const a = Buffer.from(String(given ?? ""));
+    const b = Buffer.from(expected);
+    return b.length > 0 && a.length === b.length && timingSafeEqual(a, b);
   }
 
   private remove(id: string) {

@@ -55,7 +55,7 @@ export type SignalData =
   | { restart: true };
 
 export type ClientMessage =
-  | ({ t: "hello"; key: string } & Profile)
+  | ({ t: "hello"; key: string; hostToken?: string } & Profile)
   | ({ t: "profile" } & Profile)
   | { t: "kick_voice"; id: string }
   | { t: "join_voice"; channelId: string }
