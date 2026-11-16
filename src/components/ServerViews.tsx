@@ -1,9 +1,11 @@
-import { Globe, Lock, Power, Radio, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Globe, KeyRound, Loader2, Lock, LogIn, Power, Radio, RefreshCw, Trash2, WifiOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { friends, useFriends } from "../lib/friends";
 import logo from "../assets/talkas-symbol.svg";
 import { useT } from "../lib/i18n";
 import type { SavedServer } from "../lib/native";
 import { servers, useServers } from "../lib/servers";
+import { session, useSession } from "../lib/session";
 import { Button, Modal, cx } from "./ui";
 
 /** Main area of one of your servers while it's offline: the big "Go live" call to action. */
@@ -116,6 +118,19 @@ export function ServerSettingsModal({ server, onClose, onDeleted, onLive }: { se
         </div>
         {err && <p className="text-sm text-red">{err}</p>}
 
+        <div className="flex items-center gap-3 rounded-lg border border-line p-4">
+          <KeyRound size={16} className="shrink-0 text-muted" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">
+              {t("Invite code")} <span className="ml-1 font-mono text-fg2">{server.inviteKey}</span>
+            </div>
+            <div className="text-xs text-muted">{t("Friends who saved your server use this code to come back. A new code locks out everyone who had the old one.")}</div>
+          </div>
+          <Button variant="secondary" disabled={live} onClick={() => void servers.resetKey(server.id)}>
+            <RefreshCw size={14} /> {t("New code")}
+          </Button>
+        </div>
+
         <div className="flex items-center gap-3 border-t border-line pt-5">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-red">{t("Delete server")}</div>
@@ -136,5 +151,87 @@ export function ServerSettingsModal({ server, onClose, onDeleted, onLive }: { se
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Main area of a friend's server you saved, while you're not connected to it. */
+export function FriendServerView({ id, onRemoved }: { id: string; onRemoved: () => void }) {
+  const t = useT();
+  const { list, status } = useFriends();
+  const s = useSession();
+  const f = list.find((x) => x.id === id);
+  const st = status[id] ?? { state: "checking" };
+  const [joining, setJoining] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
+  useEffect(() => {
+    void friends.check(id);
+  }, [id]);
+
+  // A failed attempt: let them try again.
+  useEffect(() => {
+    if (joining && s.status === "idle") setJoining(false);
+  }, [joining, s.status]);
+
+  if (!f) return null;
+  const online = st.state === "online";
+  const busy = joining && s.status !== "idle";
+
+  return (
+    <main className="flex flex-1 flex-col items-center justify-center gap-5 bg-elevated/40 p-8 text-center">
+      <div className="relative">
+        <img src={logo} alt="" className={cx("size-16", !online && "opacity-60 grayscale")} draggable={false} />
+        <span className={cx("absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full border-2 border-panel", online ? "bg-accent text-canvas" : "bg-faint")}>
+          {online ? <Radio size={11} /> : <WifiOff size={11} />}
+        </span>
+      </div>
+      <div className="max-w-[440px]">
+        <h1 className="text-xl font-bold">{online ? t("{name} is live", { name: f.name }) : st.state === "checking" ? f.name : t("{name} is offline", { name: f.name })}</h1>
+        <p className="mt-1.5 text-sm leading-relaxed text-fg2">
+          {online
+            ? t("Your friend is hosting it right now. Join with the saved invite — no new link needed.")
+            : st.state === "checking"
+              ? t("Checking if it's live…")
+              : st.state === "unknown"
+                ? t("Couldn't check right now. You can still try to join with the last address that worked.")
+                : t("Your friend isn't hosting it right now. It shows up as live here when they open it.")}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="primary" className="h-11 px-6" disabled={busy || st.state === "checking"} onClick={() => {
+          setJoining(true);
+          void friends.join(id);
+        }}>
+          {busy ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />} {busy ? t("Joining…") : t("Join")}
+        </Button>
+        {busy ? (
+          <Button
+            variant="ghost"
+            className="h-11"
+            onClick={() => {
+              session.disconnect();
+              setJoining(false);
+            }}
+          >
+            {t("Cancel")}
+          </Button>
+        ) : (
+          <Button variant="ghost" className="h-11" disabled={st.state === "checking"} onClick={() => void friends.check(id)}>
+            <RefreshCw size={15} /> {t("Check again")}
+          </Button>
+        )}
+      </div>
+      {s.error && joining && <p className="text-sm text-red">{s.error}</p>}
+      <Button
+        variant={confirm ? "danger" : "ghost"}
+        onClick={() => {
+          if (!confirm) return setConfirm(true);
+          friends.remove(id);
+          onRemoved();
+        }}
+      >
+        <Trash2 size={14} /> {confirm ? t("Click again to remove") : t("Remove from my servers")}
+      </Button>
+    </main>
   );
 }

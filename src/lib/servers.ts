@@ -36,6 +36,10 @@ export const servers = {
     await native!.servers.update(id, patch);
     await servers.refresh();
   },
+  async resetKey(id: string) {
+    await native!.servers.resetKey(id);
+    await servers.refresh();
+  },
   async remove(id: string) {
     if (state.host?.serverId === id) servers.goOffline();
     await native!.servers.delete(id);

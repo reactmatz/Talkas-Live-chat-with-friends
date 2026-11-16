@@ -9,10 +9,13 @@ export interface SavedServer {
   name: string;
   channels: Channel[];
   createdAt: number;
+  inviteKey: string; // stays the same between sessions, so friends who saved the server can come back
+  internet: boolean; // the internet link was on last time: turn it on again when going live
 }
 
 const MAX_CHANNELS = 40;
 const newId = () => randomBytes(5).toString("hex");
+const newKey = () => randomBytes(4).toString("hex").toUpperCase(); // 8 chars, shared with friends
 
 function cleanName(v: unknown, max: number, fallback: string) {
   return String(v ?? "").trim().replace(/\s+/g, " ").slice(0, max) || fallback;
@@ -45,7 +48,10 @@ export class ServerStore {
         name: cleanName(s.name, 40, "My Server"),
         channels: cleanChannels(s.channels),
         createdAt: Number(s.createdAt) || Date.now(),
+        inviteKey: /^[0-9A-F]{8}$/.test(String(s.inviteKey)) ? String(s.inviteKey) : newKey(),
+        internet: s.internet === true,
       }));
+      if (raw.some?.((s: { inviteKey?: unknown }) => !s.inviteKey)) this.save(); // older file: keep the new keys
     } catch {
       this.servers = [];
     }
@@ -68,6 +74,8 @@ export class ServerStore {
         { id: "lounge", name: "Lounge", kind: "voice" },
       ],
       createdAt: Date.now(),
+      inviteKey: newKey(),
+      internet: false,
     };
     this.servers.push(server);
     this.save();
@@ -81,6 +89,22 @@ export class ServerStore {
     if (patch.channels !== undefined) s.channels = cleanChannels(patch.channels);
     this.save();
     return s;
+  }
+
+  /** New invite code: everyone who had the old one (and saved the server) loses access. */
+  resetKey(id: string): SavedServer {
+    const s = this.get(id);
+    if (!s) throw new Error("Server not found.");
+    s.inviteKey = newKey();
+    this.save();
+    return s;
+  }
+
+  setInternet(id: string, on: boolean) {
+    const s = this.get(id);
+    if (!s || s.internet === on) return;
+    s.internet = on;
+    this.save();
   }
 
   delete(id: string) {

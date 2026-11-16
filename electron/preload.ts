@@ -13,6 +13,10 @@ const api = {
     create: (name: string) => ipcRenderer.invoke("servers:create", name),
     update: (id: string, patch: unknown) => ipcRenderer.invoke("servers:update", id, patch),
     delete: (id: string) => ipcRenderer.invoke("servers:delete", id),
+    resetKey: (id: string) => ipcRenderer.invoke("servers:resetKey", id),
+  },
+  beacon: {
+    lookup: (serverId: string, key: string) => ipcRenderer.invoke("beacon:lookup", serverId, key),
   },
   tunnel: {
     state: () => ipcRenderer.invoke("tunnel:state"),

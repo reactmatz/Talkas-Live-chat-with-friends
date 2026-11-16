@@ -22,12 +22,13 @@ import { useEffect, useRef, useState } from "react";
 import type { Channel, ChannelKind, ServerInfo } from "../../shared/protocol";
 import { useT } from "../lib/i18n";
 import type { SavedServer } from "../lib/native";
+import { useFriends } from "../lib/friends";
 import { servers, useServers } from "../lib/servers";
 import { session, useSession } from "../lib/session";
 import { MemberMenu, type MenuTarget } from "./MemberMenu";
 import { Avatar, Button, IconButton, Modal, cx } from "./ui";
 
-export type View = { type: "saved"; id: string } | { type: "remote" } | null;
+export type View = { type: "saved"; id: string } | { type: "friend"; id: string } | { type: "remote" } | null;
 
 const initials = (name: string) =>
   name
@@ -42,7 +43,9 @@ export function ServerRail({ view, onView, onAdd, onLeave }: { view: View; onVie
   const t = useT();
   const s = useSession();
   const { list, host } = useServers();
-  const remote = s.server && !list.some((x) => x.id === s.server!.id) ? s.server : null;
+  const fr = useFriends();
+  const connectedTo = s.server && s.status !== "idle" ? s.server.id : null;
+  const remote = s.server && !list.some((x) => x.id === s.server!.id) && !fr.list.some((f) => f.id === s.server!.id) ? s.server : null;
 
   const Icon = ({ name, active, live, onClick, title }: { name: string; active: boolean; live: boolean; onClick: () => void; title: string }) => (
     <div className="relative">
@@ -69,6 +72,21 @@ export function ServerRail({ view, onView, onAdd, onLeave }: { view: View; onVie
           <div className="my-1 h-0.5 w-8 rounded bg-line" />
         </>
       )}
+      {fr.list.map((f) => {
+        const here = connectedTo === f.id;
+        const online = here || fr.status[f.id]?.state === "online";
+        return (
+          <Icon
+            key={f.id}
+            name={f.name}
+            title={`${f.name} · ${online ? t("Live") : t("Offline")}`}
+            active={(view?.type === "friend" && view.id === f.id) || (view?.type === "remote" && here)}
+            live={online}
+            onClick={() => onView(here ? { type: "remote" } : { type: "friend", id: f.id })}
+          />
+        );
+      })}
+      {fr.list.length > 0 && list.length > 0 && <div className="my-1 h-0.5 w-8 rounded bg-line" />}
       {list.map((srv) => (
         <Icon
           key={srv.id}

@@ -1,14 +1,20 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, session, shell } from "electron";
 import { join } from "node:path";
 import { DEFAULT_PORT } from "../shared/protocol";
-import { checkPublicAddress, QuickTunnel } from "./cloudflare";
+import { BeaconPublisher, lookupBeacon } from "./beacon";
+import { checkPublicAddress, QuickTunnel, type TunnelState } from "./cloudflare";
 import { ServerStore } from "./servers";
 import { SignalingServer } from "./signaling";
 import { Updater } from "./updater";
 
 const DEV_URL = "http://localhost:5180";
 const signaling = new SignalingServer();
-const tunnel = new QuickTunnel(join(app.getPath("userData"), "bin"), (s) => win?.webContents.send("tunnel:state", s));
+const servers = new ServerStore(join(app.getPath("userData"), "servers.json"));
+const beacon = new BeaconPublisher();
+const tunnel = new QuickTunnel(join(app.getPath("userData"), "bin"), (s) => {
+  win?.webContents.send("tunnel:state", s);
+  onTunnel(s);
+});
 let win: BrowserWindow | null = null;
 const updater = new Updater(() => win);
 let pendingSourceId: string | null = null; // chosen in the renderer's screen picker
@@ -89,8 +95,16 @@ function setupPermissions() {
   );
 }
 
+/** Keeps friends who saved this server pointed at the current internet link (see beacon.ts). */
+function onTunnel(s: TunnelState) {
+  const info = signaling.getInfo();
+  if (s.state === "on" && info.running) {
+    servers.setInternet(info.serverId, true); // next "Go live" opens the link again by itself
+    beacon.online(info.serverId, info.inviteKey, info.name, s.url);
+  } else if (s.state === "off" || s.state === "error") beacon.offline();
+}
+
 function setupIpc() {
-  const servers = new ServerStore(join(app.getPath("userData"), "servers.json"));
   ipcMain.handle("servers:list", () => servers.list());
   ipcMain.handle("servers:create", (_e, name: string) => servers.create(String(name ?? "")));
   ipcMain.handle("servers:update", (_e, id: string, patch: { name?: string; channels?: unknown }) => {
@@ -111,11 +125,15 @@ function setupIpc() {
     const saved = servers.get(String(serverId));
     if (!saved) throw new Error("Server not found.");
     tunnel.stop(); // a new session gets a new internet link
-    return signaling.start({
+    const info = await signaling.start({
       server: saved,
       port: Number(port) || DEFAULT_PORT,
       dataDir: join(app.getPath("userData"), "host", saved.id),
+      inviteKey: saved.inviteKey,
     });
+    // The link was on last time: open it again, so friends who saved the server can join without a new invite.
+    if (saved.internet) void tunnel.start(info.port);
+    return info;
   });
   ipcMain.handle("host:stop", () => {
     tunnel.stop();
@@ -128,7 +146,16 @@ function setupIpc() {
     const info = signaling.getInfo();
     return info.running ? tunnel.start(info.port) : { state: "error", message: "Start hosting first." };
   });
-  ipcMain.handle("tunnel:stop", () => tunnel.stop());
+  ipcMain.handle("tunnel:stop", () => {
+    const info = signaling.getInfo();
+    if (info.running) servers.setInternet(info.serverId, false); // stopped on purpose: stay LAN-only next time
+    tunnel.stop();
+  });
+  ipcMain.handle("servers:resetKey", (_e, id: string) => {
+    if (signaling.getInfo().serverId === String(id)) throw new Error("Go offline before changing the invite code.");
+    return servers.resetKey(String(id));
+  });
+  ipcMain.handle("beacon:lookup", (_e, serverId: string, key: string) => lookupBeacon(String(serverId ?? ""), String(key ?? "")));
   ipcMain.handle("tunnel:check", (_e, address: string) => checkPublicAddress(String(address ?? "")));
 
   ipcMain.handle("screen:sources", async () => {

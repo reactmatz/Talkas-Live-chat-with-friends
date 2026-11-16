@@ -20,10 +20,14 @@ export interface ScreenPreset {
 }
 
 export const SCREEN_PRESETS: ScreenPreset[] = [
+  // 30 fps: the same upload spread over half the frames, so fast game motion stays sharp instead of smearing.
+  { id: "720p30", label: "720p · 30 fps", height: 720, fps: 30, bitrate: 4_000_000, hint: "motion" },
+  { id: "1080p30", label: "1080p · 30 fps", height: 1080, fps: 30, bitrate: 8_000_000, hint: "motion" },
+  { id: "1440p30", label: "1440p · 30 fps", height: 1440, fps: 30, bitrate: 12_000_000, hint: "motion" },
+  { id: "1080p15", label: "1080p · text & code", height: 1080, fps: 15, bitrate: 3_000_000, hint: "detail" },
   { id: "720p60", label: "720p · 60 fps", height: 720, fps: 60, bitrate: 4_000_000, hint: "motion" },
   { id: "1080p60", label: "1080p · 60 fps", height: 1080, fps: 60, bitrate: 8_000_000, hint: "motion" },
   { id: "1440p60", label: "1440p · 60 fps", height: 1440, fps: 60, bitrate: 14_000_000, hint: "motion" },
-  { id: "1080p15", label: "1080p · text & code", height: 1080, fps: 15, bitrate: 3_000_000, hint: "detail" },
 ];
 
 interface Peer {

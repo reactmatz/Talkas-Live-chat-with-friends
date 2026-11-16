@@ -14,6 +14,16 @@ export interface SavedServer {
   name: string;
   channels: Channel[];
   createdAt: number;
+  inviteKey: string;
+  internet: boolean;
+}
+
+/** Where a saved friend's server is right now (electron/beacon.ts). */
+export interface Beacon {
+  online: boolean;
+  url: string | null;
+  name: string;
+  at: number;
 }
 
 export interface HostInfo {
@@ -50,7 +60,9 @@ interface NativeApi {
     create(name: string): Promise<SavedServer>;
     update(id: string, patch: { name?: string; channels?: Channel[] }): Promise<SavedServer>;
     delete(id: string): Promise<void>;
+    resetKey(id: string): Promise<SavedServer>;
   };
+  beacon: { lookup(serverId: string, key: string): Promise<Beacon | null> };
   tunnel: {
     state(): Promise<TunnelState>;
     start(): Promise<TunnelState>;

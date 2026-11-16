@@ -30,6 +30,7 @@ export interface HostOptions {
   server: ServerInfo;
   port: number;
   dataDir: string;
+  inviteKey: string;
 }
 
 export interface HostInfo {
@@ -79,7 +80,7 @@ export class SignalingServer {
       this.history = {};
     }
 
-    const inviteKey = randomBytes(4).toString("hex").toUpperCase(); // 8 chars, shared with friends
+    const inviteKey = opts.inviteKey; // saved with the server: the same code every session
     this.http = createServer((_, res) => {
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("Talkas signaling server");

@@ -189,7 +189,7 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
       {/* Floating tiles: anywhere on the stage, including the middle */}
       {floating.map((t) => (
         <FloatingTile key={t.key} stage={stage} place={layoutOf(t).float!} faded={!layoutOf(t).pinned && idle} onPlace={(float) => setLayout(t, { float })}>
-          <TileView tile={tile(t)} idle={idle && !layoutOf(t).pinned} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
+          <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
         </FloatingTile>
       ))}
 
@@ -200,7 +200,7 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
           const v = tile(pt);
           return (
             <PopOut key={pt.key} id={pt.key} title={pt.kind === "screen" ? t("{name}'s screen", { name: v.name }) : `${v.name} — Talkas`} onClosed={() => setPopped((p) => p.filter((k) => k !== pt.key))}>
-              <TileView tile={v} big fullscreen idle={false} onClick={() => undefined} onContextMenu={(e) => e.preventDefault()} />
+              <PopTile tile={v} />
             </PopOut>
           );
         })}
@@ -309,6 +309,17 @@ function TileView({
       {isScreen && !big && (
         <span className="absolute inset-0 flex items-center justify-center bg-void/40 text-sm font-semibold opacity-0 transition-opacity group-hover:opacity-100">{t("Watch stream")}</span>
       )}
+    </div>
+  );
+}
+
+/** A popped-out tile: its name label fades with the mouse idle inside that window, like on the stage. */
+function PopTile({ tile }: { tile: Parameters<typeof TileView>[0]["tile"] }) {
+  const box = useRef<HTMLDivElement>(null);
+  const idle = useIdle(box, IDLE_MS, true);
+  return (
+    <div ref={box} className={cx("h-full w-full", idle && "cursor-none [&_*]:cursor-none")}>
+      <TileView tile={tile} big fullscreen idle={idle} onClick={() => undefined} onContextMenu={(e) => e.preventDefault()} />
     </div>
   );
 }

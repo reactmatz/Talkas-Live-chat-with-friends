@@ -1,18 +1,19 @@
 import { Settings as Cog } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Channel } from "../shared/protocol";
 import logo from "./assets/talkas-symbol.svg";
 import { ConnectModal } from "./components/ConnectScreen";
 import { InviteModal } from "./components/InviteModal";
 import { RemoteAudio } from "./components/RemoteAudio";
 import { ScreenPicker } from "./components/ScreenPicker";
-import { OfflineServer, ServerSettingsModal } from "./components/ServerViews";
+import { FriendServerView, OfflineServer, ServerSettingsModal } from "./components/ServerViews";
 import { SettingsPage } from "./components/SettingsPage";
 import { ChannelSidebar, ServerRail, type View } from "./components/Sidebar";
 import { TextChannel } from "./components/TextChannel";
 import { Button, TitleBar } from "./components/ui";
 import { VoiceStage } from "./components/VoiceStage";
 import { useT } from "./lib/i18n";
+import { friends, useFriends } from "./lib/friends";
 import { native } from "./lib/native";
 import { servers, useServers } from "./lib/servers";
 import { session, useSession } from "./lib/session";
@@ -22,6 +23,7 @@ export default function App() {
   const t = useT();
   const s = useSession();
   const { list, host } = useServers();
+  const fr = useFriends();
   const [view, setView] = useState<View>(null);
   const [channelId, setChannelId] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
@@ -36,14 +38,16 @@ export default function App() {
     document.documentElement.style.zoom = String(zoom);
   }, [zoom]);
 
-  // First launch: open on your first saved server, or the create/join window if you have none.
+  // First launch: open on your first saved server (or a friend's), or the create/join window if you have none.
   const [booted, setBooted] = useState(false);
   useEffect(() => {
     if (booted) return;
     const t = setTimeout(() => {
       setBooted(true);
       const first = servers.get().list[0];
+      const friend = friends.get().list[0];
       if (first) setView({ type: "saved", id: first.id });
+      else if (friend) setView({ type: "friend", id: friend.id });
       else setConnect(native ? "create" : "join");
     }, 150); // give the saved-server list a moment to load
     return () => clearTimeout(t);
@@ -66,9 +70,28 @@ export default function App() {
     return () => clearTimeout(id);
   }, [s.error, s.server]);
 
-  // If the remote server goes away, fall back to your first server.
+  // A friend's server welcomed us: keep it in the server list for next time.
+  const lastRemote = useRef<string | null>(null);
   useEffect(() => {
-    if (view?.type === "remote" && s.status === "idle") setView(list[0] ? { type: "saved", id: list[0].id } : null);
+    if (s.status === "open" && s.server && !list.some((x) => x.id === s.server!.id)) {
+      friends.joined(s.server);
+      lastRemote.current = s.server.id;
+    }
+  }, [s.status, s.server, list]);
+
+  // Joined from a saved friend's server page: show the server.
+  useEffect(() => {
+    if (view?.type === "friend" && s.status === "open" && s.server?.id === view.id) setView({ type: "remote" });
+  }, [view, s.status, s.server]);
+
+  // If the remote server goes away: back to that friend's (now offline) server, or your first server.
+  useEffect(() => {
+    if (view?.type !== "remote" || s.status !== "idle") return;
+    const id = lastRemote.current;
+    if (id && friends.get().list.some((f) => f.id === id)) {
+      setView({ type: "friend", id });
+      void friends.check(id);
+    } else setView(list[0] ? { type: "saved", id: list[0].id } : null);
   }, [view, s.status, list]);
 
   const leave = () => {
@@ -113,6 +136,14 @@ export default function App() {
               saved && <OfflineServer server={saved} onLive={() => undefined} />
             )}
           </>
+        ) : view?.type === "friend" && fr.list.some((f) => f.id === view.id) ? (
+          <FriendServerView
+            id={view.id}
+            onRemoved={() => {
+              const next = friends.get().list[0];
+              setView(list[0] ? { type: "saved", id: list[0].id } : next ? { type: "friend", id: next.id } : null);
+            }}
+          />
         ) : (
           <main className="flex flex-1 flex-col items-center justify-center gap-5 bg-panel p-8 text-center">
             <img src={logo} alt="" className="size-16" draggable={false} />

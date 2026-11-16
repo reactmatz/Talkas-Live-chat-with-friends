@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import logo from "../assets/talkas-symbol.svg";
 import { DEFAULT_PORT } from "../../shared/protocol";
 import { useT } from "../lib/i18n";
+import { friends } from "../lib/friends";
 import { native } from "../lib/native";
 import { servers } from "../lib/servers";
 import { session, useSession } from "../lib/session";
@@ -107,6 +108,7 @@ export function ConnectModal({
     save({ name: nick, hue, address });
     if (servers.get().host) servers.goOffline(); // one server at a time: stop hosting yours
     setSubmitted(true);
+    friends.connecting(address, key); // saved to your server list once the friend's server welcomes you
     session.connect({ address, key, profile: profile(), publicStun: stun });
   };
 

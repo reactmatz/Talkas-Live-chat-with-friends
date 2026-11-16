@@ -86,7 +86,7 @@ export function InviteModal({ host, onClose }: { host: HostInfo; onClose: () => 
           )}
 
           <p className="text-xs leading-relaxed text-muted">
-            {t("Uses a Cloudflare tunnel: friends reach your server through a trycloudflare.com address and never see your IP during the handshake. The first time, Talkas downloads Cloudflare's cloudflared. The link changes every time you go live. Voice and video still connect directly between PCs.")}
+            {t("Uses a Cloudflare tunnel: friends reach your server through a trycloudflare.com address and never see your IP during the handshake. The first time, Talkas downloads Cloudflare's cloudflared. The link changes every time you go live, but friends who joined once find the new one by themselves. Voice and video still connect directly between PCs.")}
           </p>
         </section>
 

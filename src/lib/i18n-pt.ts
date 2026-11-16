@@ -1,8 +1,10 @@
 /** Portuguese (Brazil). Keys are the English UI text. Missing keys fall back to English. */
 export const ptBR: Record<string, string> = {
   "(Windows only)": "(só no Windows)",
+  "1080p · 30 fps": "1080p · 30 fps",
   "1080p · 60 fps": "1080p · 60 fps",
   "1080p · text & code": "1080p · texto e código",
+  "1440p · 30 fps": "1440p · 30 fps",
   "1440p · 60 fps": "1440p · 60 fps",
   "720p · 60 fps": "720p · 60 fps",
   "About me": "Sobre mim",
@@ -178,8 +180,8 @@ export const ptBR: Record<string, string> = {
   "Used the next time you turn on video.": "Usada na próxima vez que você ligar o vídeo.",
   "User Settings": "Configurações de usuário",
   "User Volume": "Volume da voz",
-  "Uses a Cloudflare tunnel: friends reach your server through a trycloudflare.com address and never see your IP during the handshake. The first time, Talkas downloads Cloudflare's cloudflared. The link changes every time you go live. Voice and video still connect directly between PCs.":
-    "Usa um túnel da Cloudflare: seus amigos chegam ao servidor por um endereço trycloudflare.com e não veem seu IP na conexão. Na primeira vez, o Talkas baixa o cloudflared da Cloudflare. O link muda toda vez que você fica online. Voz e vídeo continuam indo direto entre os PCs.",
+  "Uses a Cloudflare tunnel: friends reach your server through a trycloudflare.com address and never see your IP during the handshake. The first time, Talkas downloads Cloudflare's cloudflared. The link changes every time you go live, but friends who joined once find the new one by themselves. Voice and video still connect directly between PCs.":
+    "Usa um túnel da Cloudflare: seus amigos chegam ao servidor por um endereço trycloudflare.com e não veem seu IP na conexão. Na primeira vez, o Talkas baixa o cloudflared da Cloudflare. O link muda toda vez que você fica online, mas os amigos que já entraram uma vez encontram o novo sozinhos. Voz e vídeo continuam indo direto entre os PCs.",
   "Uses a public STUN server only to discover addresses behind routers. Voice and video still go peer to peer. Applies the next time you connect.":
     "Usa um servidor STUN público só para descobrir endereços atrás de roteadores. Voz e vídeo continuam P2P. Vale na próxima conexão.",
   "Uses a public STUN server only to find addresses. Media still goes peer to peer. Off = LAN only.":
@@ -236,4 +238,17 @@ export const ptBR: Record<string, string> = {
   "Camera access is blocked. Allow it in Windows Settings → Privacy → Camera.": "O acesso à câmera está bloqueado. Libere em Configurações do Windows → Privacidade → Câmera.",
   "Couldn't reach the update page. The releases may be private — download the new version manually.": "Não foi possível acessar a página de atualizações. Os releases podem estar privados — baixe a nova versão manualmente.",
   "No internet connection.": "Sem conexão com a internet.",
+  "720p · 30 fps": "720p · 30 fps",
+  "{name} is live": "{name} está online",
+  "Your friend is hosting it right now. Join with the saved invite — no new link needed.": "Seu amigo está hospedando agora. Entre com o convite salvo — sem precisar de link novo.",
+  "Checking if it's live…": "Verificando se está online…",
+  "Couldn't check right now. You can still try to join with the last address that worked.": "Não deu para verificar agora. Você ainda pode tentar entrar pelo último endereço que funcionou.",
+  "Your friend isn't hosting it right now. It shows up as live here when they open it.": "Seu amigo não está hospedando agora. Ele aparece como online aqui quando for aberto.",
+  "Joining…": "Entrando…",
+  "Check again": "Verificar de novo",
+  "Click again to remove": "Clique de novo para remover",
+  "Remove from my servers": "Remover dos meus servidores",
+  "Friends who saved your server use this code to come back. A new code locks out everyone who had the old one.": "Amigos que salvaram seu servidor usam este código para voltar. Um código novo bloqueia todos que tinham o antigo.",
+  "New code": "Novo código",
+  "Go offline before changing the invite code.": "Fique offline antes de trocar o código de convite.",
 };
