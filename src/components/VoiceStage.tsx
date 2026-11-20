@@ -305,9 +305,10 @@ function TileView({
       className={cx(
         "group relative flex h-full w-full cursor-pointer items-center justify-center overflow-hidden bg-panel transition-shadow",
         fullscreen ? "rounded-none" : "rounded-[18px]",
-        tile.speaking && !isScreen && "ring-2 ring-accent ring-inset",
       )}
     >
+      {/* speaking outline: a layer above the video, so a camera doesn't cover it */}
+      {tile.speaking && !isScreen && <span className={cx("pointer-events-none absolute inset-0 z-10 border-2 border-accent", fullscreen ? "rounded-none" : "rounded-[18px]")} />}
       {tile.stream ? (
         <VideoView stream={tile.stream} mirror={tile.self && !isScreen} contain={isScreen || big} />
       ) : isScreen ? (
