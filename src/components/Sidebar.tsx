@@ -26,17 +26,13 @@ import { useFriends } from "../lib/friends";
 import { servers, useServers } from "../lib/servers";
 import { session, useSession } from "../lib/session";
 import { MemberMenu, type MenuTarget } from "./MemberMenu";
-import { Avatar, Button, IconButton, Modal, cx } from "./ui";
+import logo from "../assets/talkas-symbol.svg";
+import { Avatar, Button, IconButton, Modal, cx, hueGradient, initials } from "./ui";
 
 export type View = { type: "saved"; id: string } | { type: "friend"; id: string } | { type: "remote" } | null;
 
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase() || "T";
+/** Stable hue per server name, so each server keeps its colour in the rail. */
+const nameHue = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 
 /** Far-left rail: your saved servers (green dot = live), the server you joined, create/join and disconnect. */
 export function ServerRail({ view, onView, onAdd, onLeave }: { view: View; onView: (v: View) => void; onAdd: () => void; onLeave: () => void }) {
@@ -48,30 +44,46 @@ export function ServerRail({ view, onView, onAdd, onLeave }: { view: View; onVie
   const remote = s.server && !list.some((x) => x.id === s.server!.id) && !fr.list.some((f) => f.id === s.server!.id) ? s.server : null;
 
   const Icon = ({ name, active, live, onClick, title }: { name: string; active: boolean; live: boolean; onClick: () => void; title: string }) => (
-    <div className="relative">
-      <span className={cx("absolute top-1/2 -left-3 w-1 -translate-y-1/2 rounded-r bg-fg transition-all", active ? "h-10" : "h-0")} />
+    <div className="relative shrink-0">
+      <span className={cx("absolute top-1/2 -left-4 w-1 -translate-y-1/2 rounded-r bg-accent-soft transition-all", active ? "h-8" : "h-0")} />
       <button
         title={title}
         onClick={onClick}
+        style={{ background: hueGradient(nameHue(name)) }}
         className={cx(
-          "flex size-12 items-center justify-center text-sm font-bold transition-all",
-          active ? "rounded-2xl bg-accent text-canvas" : "rounded-3xl bg-panel text-fg hover:rounded-2xl hover:bg-accent hover:text-canvas",
+          "flex size-12 items-center justify-center rounded-2xl text-[15px] font-bold text-light transition-all",
+          active ? "ring-2 ring-accent-soft ring-offset-2 ring-offset-void" : live ? "hover:brightness-110" : "opacity-60 saturate-50 hover:opacity-100 hover:saturate-100",
         )}
       >
         {initials(name)}
       </button>
-      {live && <span className="absolute -right-0.5 -bottom-0.5 size-4 rounded-full border-[3px] border-canvas bg-accent" title={t("Live")} />}
+      {live && <span className="absolute -right-1 -bottom-1 size-4 rounded-full border-[3px] border-void bg-accent" title={t("Live")} />}
     </div>
   );
+  const Label = ({ children }: { children: string }) => <span className="pt-1 text-[9.5px] font-semibold tracking-[0.12em] text-muted uppercase">{children}</span>;
 
   return (
-    <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto bg-canvas py-3">
+    <nav className="flex w-20 shrink-0 flex-col items-center gap-3 overflow-y-auto bg-void py-4">
+      <img src={logo} alt="Talkas" className="size-12 shrink-0" draggable={false} />
+      <div className="h-0.5 w-7 shrink-0 rounded bg-line" />
       {remote && (
         <>
-          <Icon name={remote.name} title={remote.name} active={view?.type === "remote"} live={false} onClick={() => onView({ type: "remote" })} />
-          <div className="my-1 h-0.5 w-8 rounded bg-line" />
+          <Icon name={remote.name} title={remote.name} active={view?.type === "remote"} live onClick={() => onView({ type: "remote" })} />
+          <div className="h-0.5 w-7 shrink-0 rounded bg-line" />
         </>
       )}
+      {list.length > 0 && <Label>{t("Yours")}</Label>}
+      {list.map((srv) => (
+        <Icon
+          key={srv.id}
+          name={srv.name}
+          title={host?.serverId === srv.id ? `${srv.name} · ${t("Live")}` : `${srv.name} · ${t("Offline")}`}
+          active={view?.type === "saved" && view.id === srv.id}
+          live={host?.serverId === srv.id}
+          onClick={() => onView({ type: "saved", id: srv.id })}
+        />
+      ))}
+      {fr.list.length > 0 && <Label>{t("Friends")}</Label>}
       {fr.list.map((f) => {
         const here = connectedTo === f.id;
         const online = here || fr.status[f.id]?.state === "online";
@@ -86,24 +98,13 @@ export function ServerRail({ view, onView, onAdd, onLeave }: { view: View; onVie
           />
         );
       })}
-      {fr.list.length > 0 && list.length > 0 && <div className="my-1 h-0.5 w-8 rounded bg-line" />}
-      {list.map((srv) => (
-        <Icon
-          key={srv.id}
-          name={srv.name}
-          title={host?.serverId === srv.id ? `${srv.name} · ${t("Live")}` : `${srv.name} · ${t("Offline")}`}
-          active={view?.type === "saved" && view.id === srv.id}
-          live={host?.serverId === srv.id}
-          onClick={() => onView({ type: "saved", id: srv.id })}
-        />
-      ))}
-      <button title={t("Create or join a server")} onClick={onAdd} className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-panel text-accent transition-all hover:rounded-2xl hover:bg-accent hover:text-canvas">
+      <button title={t("Create or join a server")} onClick={onAdd} className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-dashed border-faint text-accent-soft transition-all hover:border-accent hover:bg-accent/10">
         <Plus size={22} />
       </button>
       <div className="flex-1" />
       {s.server && (
-        <button title={t("Disconnect")} onClick={onLeave} className="flex size-12 shrink-0 items-center justify-center rounded-3xl bg-panel text-fg2 transition-all hover:rounded-2xl hover:bg-red hover:text-fg">
-          <LogOut size={18} />
+        <button title={t("Disconnect")} onClick={onLeave} className="flex size-11 shrink-0 items-center justify-center rounded-2xl text-fg2 transition-colors hover:bg-red/15 hover:text-red">
+          <LogOut size={19} />
         </button>
       )}
     </nav>
@@ -149,16 +150,20 @@ export function ChannelSidebar({
   const saveChannels = (channels: Channel[]) => void servers.update(saved!.id, { channels });
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col bg-panel">
-      <header className="flex h-12 items-center gap-1 border-b border-line pr-2 pl-4 shadow-sm">
-        <button onClick={owner ? onServerSettings : undefined} className={cx("flex min-w-0 flex-1 items-center gap-1 text-left", owner && "hover:text-fg2")} title={owner ? t("Server settings") : undefined}>
-          <span className="truncate text-[15px] font-semibold">{server.name}</span>
-          {owner && <ChevronDown size={16} className="shrink-0 text-muted" />}
-        </button>
-        {owner && live && <IconButton icon={UserPlus} label={t("Invite friends")} onClick={onInvite} size={16} />}
+    <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-panel">
+      <header className="flex items-center gap-2 px-5 pt-5 pb-4">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[18px] font-bold tracking-tight">{server.name}</div>
+          <div className={cx("mt-1 flex items-center gap-1.5 text-xs font-medium", live ? "text-accent-soft" : "text-muted")}>
+            <span className={cx("size-2 rounded-full", live ? "bg-accent" : "bg-faint")} />
+            {live ? (owner ? t("Live · you're hosting") : t("Live")) : t("Offline")}
+          </div>
+        </div>
+        {owner && live && <IconButton icon={UserPlus} label={t("Invite friends")} onClick={onInvite} size={17} className="size-8 bg-elevated" />}
+        {owner && <IconButton icon={ChevronDown} label={t("Server settings")} onClick={onServerSettings} size={17} className="size-8 bg-elevated" />}
       </header>
 
-      <div className="flex-1 overflow-y-auto px-2 py-3">
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
         <Section title={t("Text channels")} onAdd={owner ? () => setDialog({ kind: "text" }) : undefined} addLabel={t("Create channel")}>
           {text.map((c) => (
             <ChannelRow
@@ -166,7 +171,7 @@ export function ChannelSidebar({
               active={selected === c.id}
               onClick={() => onSelect(c)}
               onContextMenu={owner ? (e) => (e.preventDefault(), setChanMenu({ x: e.clientX, y: e.clientY, channel: c })) : undefined}
-              icon={<Hash size={18} className="text-muted" />}
+              icon={<Hash size={17} className="text-muted" />}
               name={c.name}
             />
           ))}
@@ -180,10 +185,10 @@ export function ChannelSidebar({
                   active={selected === c.id}
                   onClick={() => onSelect(c)}
                   onContextMenu={owner ? (e) => (e.preventDefault(), setChanMenu({ x: e.clientX, y: e.clientY, channel: c })) : undefined}
-                  icon={<Volume2 size={18} className="text-muted" />}
+                  icon={<Volume2 size={17} className="text-muted" />}
                   name={c.name}
                 />
-                <div className="flex flex-col gap-0.5 pb-1 pl-8">
+                <div className="flex flex-col gap-0.5 pb-1 pl-9">
                   {ids.map((id) => {
                     const m = s.members[id];
                     if (!m) return null;
@@ -194,11 +199,11 @@ export function ChannelSidebar({
                           e.preventDefault();
                           setMenu({ x: e.clientX, y: e.clientY, memberId: id, stream: false });
                         }}
-                        className="flex items-center gap-2 rounded px-1.5 py-1 text-[13px] text-fg2 hover:bg-hover"
+                        className={cx("flex items-center gap-2.5 rounded-lg px-1.5 py-1 text-[13px] hover:bg-hover", s.speaking[id] && !m.state.muted ? "text-fg" : "text-fg2")}
                       >
-                        <Avatar name={m.name} hue={m.hue} src={m.avatar} size={22} speaking={!!s.speaking[id] && !m.state.muted} />
+                        <Avatar name={m.name} hue={m.hue} src={m.avatar} size={24} speaking={!!s.speaking[id] && !m.state.muted} />
                         <span className="flex-1 truncate">{m.name}</span>
-                        {m.state.sharing && <span className="rounded bg-red px-1 text-[9px] font-bold text-fg">{t("LIVE")}</span>}
+                        {m.state.sharing && <span className="rounded-md bg-red px-1.5 text-[9px] leading-4 font-bold text-light">{t("LIVE")}</span>}
                         {m.state.camera && <Video size={13} className="text-fg2" />}
                         {m.state.deafened ? <HeadphoneOff size={13} className="text-red" /> : m.state.muted ? <MicOff size={13} className="text-red" /> : null}
                       </div>
@@ -212,29 +217,33 @@ export function ChannelSidebar({
       </div>
 
       {inVoice && (
-        <div className="border-t border-line px-2 py-2">
-          <div className="flex items-center gap-2 px-1">
-            <Signal size={16} className="text-accent" />
+        <div className="mx-3 mb-3 rounded-2xl border border-accent/35 bg-elevated p-3.5">
+          <div className="flex items-center gap-2.5">
+            <Signal size={18} className="shrink-0 text-accent-soft" />
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold text-accent">{t("Voice Connected")}</div>
+              <div className="text-[13.5px] font-semibold text-accent-soft">{t("Voice Connected")}</div>
               <div className="truncate text-xs text-muted">
-                {inVoice.name} / {server.name}
+                {inVoice.name} · {server.name}
               </div>
             </div>
-            <IconButton icon={PhoneOff} label={t("Disconnect")} onClick={() => session.leaveVoice()} />
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             <button
+              title={s.local.camera ? t("Turn off camera") : t("Turn on camera")}
               onClick={() => void session.toggleCamera()}
-              className={cx("flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-medium", s.local.camera ? "bg-accent/20 text-accent" : "bg-elevated text-fg2 hover:bg-hover hover:text-fg")}
+              className={cx("flex h-9 items-center justify-center gap-1.5 rounded-xl text-xs font-medium transition-colors", s.local.camera ? "bg-accent/20 text-accent-soft" : "bg-hover text-fg hover:bg-faint/60")}
             >
-              <Camera size={15} /> {t("Video")}
+              <Camera size={16} /> {t("Video")}
             </button>
             <button
+              title={s.local.sharing ? t("Stop sharing") : t("Share your screen")}
               onClick={() => (s.local.sharing ? void session.stopShare() : onShare())}
-              className={cx("flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-medium", s.local.sharing ? "bg-accent/20 text-accent" : "bg-elevated text-fg2 hover:bg-hover hover:text-fg")}
+              className={cx("flex h-9 items-center justify-center gap-1.5 rounded-xl text-xs font-medium transition-colors", s.local.sharing ? "bg-accent/20 text-accent-soft" : "bg-hover text-fg hover:bg-faint/60")}
             >
-              <MonitorUp size={15} /> {s.local.sharing ? t("Stop") : t("Screen")}
+              <MonitorUp size={16} /> {s.local.sharing ? t("Stop") : t("Screen")}
+            </button>
+            <button title={t("Disconnect")} onClick={() => session.leaveVoice()} className="flex h-9 items-center justify-center rounded-xl bg-red text-light transition-colors hover:bg-red/85">
+              <PhoneOff size={16} />
             </button>
           </div>
         </div>
@@ -273,13 +282,13 @@ function UserFooter({ onSettings, status }: { onSettings: () => void; status: st
   const s = useSession();
   const me = s.selfId ? s.members[s.selfId] : null;
   return (
-    <footer className="flex items-center gap-2 bg-canvas/60 px-2 py-2">
+    <footer className="flex items-center gap-2 border-t border-line px-4 py-3">
       {me ? (
         <>
-          <Avatar name={me.name} hue={me.hue} src={me.avatar} size={32} speaking={!!s.speaking[me.id] && !s.local.muted} />
+          <Avatar name={me.name} hue={me.hue} src={me.avatar} size={36} speaking={!!s.speaking[me.id] && !s.local.muted} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-semibold">{me.name}</div>
-            <div className="text-[11px] text-muted">{status}</div>
+            <div className="truncate text-[13.5px] font-semibold">{me.name}</div>
+            <div className="text-xs text-muted">{status}</div>
           </div>
           <IconButton icon={s.local.muted ? MicOff : Mic} label={s.local.muted ? t("Unmute") : t("Mute")} onClick={() => session.toggleMute()} className={s.local.muted ? "text-red" : ""} />
           <IconButton
@@ -299,16 +308,16 @@ function UserFooter({ onSettings, status }: { onSettings: () => void; status: st
 
 function Section({ title, children, onAdd, addLabel }: { title: string; children: React.ReactNode; onAdd?: () => void; addLabel: string }) {
   return (
-    <div className="mb-4">
-      <div className="group flex items-center px-2 pb-1">
-        <span className="flex-1 text-[11px] font-bold tracking-wider text-muted uppercase">{title}</span>
+    <div className="mb-5">
+      <div className="group flex items-center px-2 pb-1.5">
+        <span className="flex-1 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">{title}</span>
         {onAdd && (
           <button onClick={onAdd} title={addLabel} aria-label={addLabel} className="text-muted hover:text-fg">
             <Plus size={15} />
           </button>
         )}
       </div>
-      <div className="flex flex-col gap-0.5">{children}</div>
+      <div className="flex flex-col gap-1">{children}</div>
     </div>
   );
 }
@@ -318,7 +327,10 @@ function ChannelRow({ active, onClick, onContextMenu, icon, name }: { active: bo
     <button
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={cx("flex h-8 items-center gap-1.5 rounded-md px-2 text-left text-[15px] transition-colors", active ? "bg-elevated text-fg" : "text-fg2 hover:bg-hover hover:text-fg")}
+      className={cx(
+        "flex h-[38px] w-full items-center gap-2.5 rounded-[10px] px-3 text-left text-[14px] transition-colors [&_svg]:shrink-0",
+        active ? "bg-hover font-semibold text-fg [&_svg]:text-accent-soft" : "font-medium text-fg2 hover:bg-hover/60 hover:text-fg",
+      )}
     >
       {icon}
       <span className="truncate">{name}</span>

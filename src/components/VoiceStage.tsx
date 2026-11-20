@@ -54,7 +54,7 @@ interface Tile {
  *  - after 3 s without mouse/keyboard activity the cursor, the floating toolbar, the participant strip
  *    and the name labels fade out; any movement brings them back instantly.
  */
-export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel; onShare: () => void; pickerOpen: boolean }) {
+export function VoiceStage({ channel, onShare, pickerOpen, actions }: { channel: Channel; onShare: () => void; pickerOpen: boolean; actions?: ReactNode }) {
   const s = useSession();
   const stage = useRef<HTMLDivElement>(null);
   const fullscreen = useFullscreen(stage);
@@ -135,9 +135,12 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
 
   if (!inCall)
     return (
-      <section className="flex flex-1 flex-col items-center justify-center gap-4 bg-void">
-        <Volume2 size={40} className="text-muted" />
-        <div className="text-xl font-semibold">{channel.name}</div>
+      <section className="relative flex flex-1 flex-col items-center justify-center gap-4 bg-void">
+        {actions && <div className="absolute top-4 right-5 flex gap-2">{actions}</div>}
+        <span className="flex size-16 items-center justify-center rounded-2xl bg-elevated text-accent-soft">
+          <Volume2 size={30} />
+        </span>
+        <div className="text-xl font-bold tracking-tight">{channel.name}</div>
         <p className="text-sm text-fg2">{(s.voice[channel.id] ?? []).length ? t("{count} in voice right now.", { count: (s.voice[channel.id] ?? []).length }) : t("No one in voice right now.")}</p>
         <Button variant="primary" onClick={() => void session.joinVoice(channel.id)}>
           {t("Join Voice")}
@@ -151,23 +154,34 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
   return (
     <section
       ref={stage}
-      className={cx("relative flex min-h-0 flex-1 flex-col bg-void transition-[cursor]", idle && "cursor-none [&_*]:cursor-none", fullscreen.active ? "p-0" : "p-3")}
+      className={cx("relative flex min-h-0 flex-1 flex-col bg-void transition-[cursor]", idle && "cursor-none [&_*]:cursor-none", fullscreen.active ? "p-0" : "gap-4 px-5 pt-4 pb-5")}
     >
       {!fullscreen.active && (
-        <header className={cx("flex h-9 shrink-0 items-center gap-2 px-1 transition-opacity", chrome)}>
-          <Volume2 size={18} className="text-muted" />
-          <span className="font-semibold">{channel.name}</span>
+        <header className={cx("flex h-11 shrink-0 items-center gap-3 transition-opacity", chrome)}>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-elevated text-accent-soft">
+            <Volume2 size={19} />
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-[16px] font-semibold">{channel.name}</div>
+            <div className="text-xs text-muted">{t("{count} in call", { count: (s.voice[channel.id] ?? []).length })}</div>
+          </div>
+          {tiles.some((x) => x.kind === "screen") && (
+            <span className="flex items-center gap-1.5 rounded-full border border-red/35 bg-red/15 px-2.5 py-1 text-xs font-semibold text-[#f87171]">
+              <span className="size-1.5 rounded-full bg-red" /> {t("LIVE")}
+            </span>
+          )}
           <ShareStats />
+          <div className="ml-auto flex items-center gap-2">{actions}</div>
         </header>
       )}
 
       {focused ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-2">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
           <div className="min-h-0 flex-1">
             <TileView tile={tile(focused)} big fullscreen={fullscreen.active} idle={idle} onClick={() => setFocus(null)} onContextMenu={openMenu(focused)} />
           </div>
           {others.length > 0 && (
-            <div className={cx("pointer-events-none flex h-28 shrink-0 justify-center gap-2", fullscreen.active && "absolute inset-x-0 bottom-24 z-10")}>
+            <div className={cx("pointer-events-none flex h-32 shrink-0 justify-center gap-4", fullscreen.active && "absolute inset-x-0 bottom-24 z-10")}>
               {others.map((t) => (
                 <div key={t.key} className={cx("pointer-events-auto aspect-video h-full transition-opacity", !layoutOf(t).pinned && chrome)}>
                   <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
@@ -177,7 +191,7 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
           )}
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 content-center gap-2" style={{ gridTemplateColumns: `repeat(${cols(docked.length)}, minmax(0, 1fr))` }}>
+        <div className="grid min-h-0 flex-1 content-center gap-4" style={{ gridTemplateColumns: `repeat(${cols(docked.length)}, minmax(0, 1fr))` }}>
           {docked.map((t) => (
             <div key={t.key} className="aspect-video max-h-full min-h-0">
               <TileView tile={tile(t)} idle={idle} onClick={() => watch(t)} onContextMenu={openMenu(t)} />
@@ -224,16 +238,16 @@ export function VoiceStage({ channel, onShare, pickerOpen }: { channel: Channel;
       <div
         onPointerEnter={() => setOverToolbar(true)}
         onPointerLeave={() => setOverToolbar(false)}
-        className={cx("absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-line bg-panel/90 p-2 shadow-2xl backdrop-blur transition-[opacity,transform]", chrome, idle && "translate-y-3")}
+        className={cx("absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-line bg-panel/90 p-2.5 shadow-2xl backdrop-blur transition-[opacity,transform]", chrome, idle && "translate-y-3")}
       >
         <Ctl on={!s.local.muted} onIcon={Mic} offIcon={MicOff} label={s.local.muted ? t("Unmute") : t("Mute")} onClick={() => session.toggleMute()} />
         <Ctl on={!s.local.deafened} onIcon={Headphones} offIcon={HeadphoneOff} label={s.local.deafened ? t("Undeafen") : t("Deafen")} onClick={() => session.toggleDeafen()} />
         <Ctl on={s.local.camera} onIcon={Video} offIcon={VideoOff} label={s.local.camera ? t("Turn off camera") : t("Turn on camera")} onClick={() => void session.toggleCamera()} neutralOff />
         <Ctl on={s.local.sharing} onIcon={MonitorX} offIcon={MonitorUp} label={s.local.sharing ? t("Stop sharing") : t("Share your screen")} onClick={() => (s.local.sharing ? void session.stopShare() : onShare())} neutralOff accentOn />
-        <div className="mx-1 h-7 w-px bg-line" />
+        <div className="mx-0.5 h-7 w-px bg-line" />
         <Ctl on onIcon={fullscreen.active ? Minimize : Maximize} offIcon={Maximize} label={fullscreen.active ? t("Exit fullscreen (F)") : t("Fullscreen (F)")} onClick={fullscreen.toggle} />
-        <button title={t("Disconnect")} onClick={() => session.leaveVoice()} className="flex h-11 w-14 items-center justify-center rounded-xl bg-red text-fg transition-colors hover:bg-red/85">
-          <PhoneOff size={20} />
+        <button title={t("Disconnect")} onClick={() => session.leaveVoice()} className="flex h-12 items-center justify-center gap-2 rounded-full bg-red px-5 text-sm font-semibold text-light transition-colors hover:bg-red/85">
+          <PhoneOff size={19} /> {t("Leave")}
         </button>
       </div>
     </section>
@@ -281,7 +295,7 @@ function TileView({
     <div
       onClick={onClick}
       onContextMenu={onContextMenu}
-      style={!tile.stream && !isScreen && tile.banner ? { background: tile.banner } : undefined}
+      style={!tile.stream && !isScreen ? { background: tile.banner ?? `linear-gradient(135deg, hsl(${tile.hue} 45% 17%), var(--color-panel) 70%)` } : undefined}
       onDoubleClick={(e) => {
         e.stopPropagation();
         const doc = e.currentTarget.ownerDocument; // the main window or a pop-out window
@@ -290,8 +304,8 @@ function TileView({
       }}
       className={cx(
         "group relative flex h-full w-full cursor-pointer items-center justify-center overflow-hidden bg-panel transition-shadow",
-        fullscreen ? "rounded-none" : "rounded-xl",
-        tile.speaking && !isScreen && "ring-2 ring-accent",
+        fullscreen ? "rounded-none" : "rounded-[18px]",
+        tile.speaking && !isScreen && "ring-2 ring-accent ring-inset",
       )}
     >
       {tile.stream ? (
@@ -302,7 +316,7 @@ function TileView({
         <Avatar name={tile.name} hue={tile.hue} src={tile.avatar} size={big ? 96 : 72} speaking={tile.speaking} />
       )}
       <Label idle={idle}>
-        {isScreen && <span className="rounded bg-red px-1 text-[10px] font-bold">{t("LIVE")}</span>}
+        {isScreen && <span className="rounded-full bg-red px-1.5 text-[10px] leading-4 font-bold text-light">{t("LIVE")}</span>}
         {tile.muted && !isScreen && <MicOff size={13} className="text-red" />}
         <span>{isScreen ? t("{name}'s screen", { name: tile.name }) : tile.name}</span>
       </Label>
@@ -375,14 +389,14 @@ function FloatingTile({ stage, place, faded, onPlace, children }: { stage: React
           moved.current = false;
         }
       }}
-      className={cx("group/float absolute z-10 aspect-video touch-none rounded-xl shadow-2xl transition-opacity", live ? "cursor-grabbing" : "cursor-grab", faded ? "pointer-events-none opacity-0 duration-500" : "opacity-100 duration-75")}
+      className={cx("group/float absolute z-10 aspect-video touch-none rounded-[18px] shadow-2xl transition-opacity", live ? "cursor-grabbing" : "cursor-grab", faded ? "pointer-events-none opacity-0 duration-500" : "opacity-100 duration-75")}
       style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: `${p.w * 100}%` }}
     >
       {children}
       <div
         onPointerDown={start("resize")}
         title={t("Resize")}
-        className="absolute right-0 bottom-0 size-4 cursor-nwse-resize rounded-br-xl border-r-2 border-b-2 border-fg/60 opacity-0 transition-opacity group-hover/float:opacity-100"
+        className="absolute right-0 bottom-0 size-4 cursor-nwse-resize rounded-br-[18px] border-r-2 border-b-2 border-fg/60 opacity-0 transition-opacity group-hover/float:opacity-100"
       />
     </div>
   );
@@ -390,7 +404,7 @@ function FloatingTile({ stage, place, faded, onPlace, children }: { stage: React
 
 function Label({ idle, children }: { idle: boolean; children: ReactNode }) {
   return (
-    <div className={cx("absolute bottom-2 left-2 flex items-center gap-1.5 rounded-md bg-void/70 px-2 py-1 text-xs font-medium transition-opacity", idle ? "opacity-0 duration-500" : "opacity-100 duration-75")}>
+    <div className={cx("absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-canvas/65 px-3 py-1.5 text-xs font-semibold backdrop-blur-md transition-opacity", idle ? "opacity-0 duration-500" : "opacity-100 duration-75")}>
       {children}
     </div>
   );
@@ -440,8 +454,8 @@ function Ctl({
       aria-label={label}
       onClick={onClick}
       className={cx(
-        "flex size-11 items-center justify-center rounded-xl transition-colors",
-        on && accentOn ? "bg-accent text-canvas hover:bg-accent-soft" : !on && !neutralOff ? "bg-red/15 text-red hover:bg-red/25" : "bg-elevated text-fg hover:bg-hover",
+        "flex size-12 items-center justify-center rounded-full transition-colors",
+        on && accentOn ? "bg-gradient-to-br from-accent-soft to-accent text-canvas hover:brightness-110" : !on && !neutralOff ? "bg-red/15 text-red hover:bg-red/25" : "bg-elevated text-fg hover:bg-hover",
       )}
     >
       <Icon size={20} />
@@ -467,7 +481,7 @@ function ShareStats() {
   }, [s.local.sharing]);
   if (!stats) return null;
   return (
-    <span className="ml-auto rounded-md bg-elevated px-2 py-0.5 font-mono text-[11px] text-fg2">
+    <span className="rounded-full border border-accent/35 bg-accent/12 px-2.5 py-1 font-mono text-[11px] text-accent-soft">
       sharing · {stats.fps} fps · {stats.mbps.toFixed(1)} Mbps
     </span>
   );

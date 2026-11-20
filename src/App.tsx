@@ -1,16 +1,17 @@
-import { Settings as Cog } from "lucide-react";
+import { MessageSquare, Settings as Cog, Users } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Channel } from "../shared/protocol";
 import logo from "./assets/talkas-symbol.svg";
 import { ConnectModal } from "./components/ConnectScreen";
 import { InviteModal } from "./components/InviteModal";
+import { MembersPanel } from "./components/MembersPanel";
 import { RemoteAudio } from "./components/RemoteAudio";
 import { ScreenPicker } from "./components/ScreenPicker";
 import { FriendServerView, OfflineServer, ServerSettingsModal } from "./components/ServerViews";
 import { SettingsPage } from "./components/SettingsPage";
 import { ChannelSidebar, ServerRail, type View } from "./components/Sidebar";
 import { TextChannel } from "./components/TextChannel";
-import { Button, TitleBar } from "./components/ui";
+import { Button, IconButton, TitleBar } from "./components/ui";
 import { VoiceStage } from "./components/VoiceStage";
 import { useT } from "./lib/i18n";
 import { friends, useFriends } from "./lib/friends";
@@ -18,6 +19,22 @@ import { native } from "./lib/native";
 import { servers, useServers } from "./lib/servers";
 import { session, useSession } from "./lib/session";
 import { useSettings } from "./lib/settings";
+
+const readFlag = (key: string, fallback: boolean) => {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v === "1";
+  } catch {
+    return fallback;
+  }
+};
+const writeFlag = (key: string, on: boolean) => {
+  try {
+    localStorage.setItem(key, on ? "1" : "0");
+  } catch {
+    // storage unavailable: the panel just isn't remembered
+  }
+};
 
 export default function App() {
   const t = useT();
@@ -32,6 +49,10 @@ export default function App() {
   const [serverSettings, setServerSettings] = useState(false);
   const [connect, setConnect] = useState<"create" | "join" | null>(null);
   const { zoom } = useSettings();
+  const [showMembers, setShowMembers] = useState(() => readFlag("talkas.members", true));
+  const [voiceChat, setVoiceChat] = useState(() => readFlag("talkas.voiceChat", false));
+  const toggleMembers = () => setShowMembers((v) => (writeFlag("talkas.members", !v), !v));
+  const toggleVoiceChat = () => setVoiceChat((v) => (writeFlag("talkas.voiceChat", !v), !v));
 
   // Appearance → zoom level (Chromium CSS zoom scales the whole UI, including hit-testing).
   useEffect(() => {
@@ -100,6 +121,10 @@ export default function App() {
   };
 
   const channel = server?.channels.find((c) => c.id === channelId) ?? null;
+  // Chat next to a call: the text channel you last opened on this server, or the first one.
+  const lastText = useRef<string | null>(null);
+  if (channel?.kind === "text") lastText.current = channel.id;
+  const chatChannel = server?.channels.find((c) => c.id === lastText.current) ?? server?.channels.find((c) => c.kind === "text") ?? null;
   const select = (c: Channel) => {
     setChannelId(c.id);
     if ((live || remoteConnected) && c.kind === "voice" && s.voiceChannel !== c.id) void session.joinVoice(c.id);
@@ -129,8 +154,39 @@ export default function App() {
             {live || remoteConnected ? (
               <main className="flex min-w-0 flex-1 flex-col">
                 {s.status !== "open" && <div className="bg-amber/15 px-4 py-1.5 text-center text-xs text-amber">{t("Connection to the server lost — reconnecting…")}</div>}
-                {channel?.kind === "text" && <TextChannel channel={channel} />}
-                {channel?.kind === "voice" && <VoiceStage channel={channel} onShare={() => setPicker(true)} pickerOpen={picker} />}
+                <div className="flex min-h-0 flex-1">
+                  {channel?.kind === "text" && (
+                    <>
+                      <TextChannel
+                        channel={channel}
+                        actions={<IconButton icon={Users} label={showMembers ? t("Hide members") : t("Show members")} onClick={toggleMembers} active={showMembers} size={19} className={showMembers ? "size-9 text-accent-soft" : "size-9"} />}
+                      />
+                      {showMembers && <MembersPanel server={server} onInvite={saved && host ? () => setInvite(true) : undefined} onClose={toggleMembers} />}
+                    </>
+                  )}
+                  {channel?.kind === "voice" && (
+                    <>
+                      <VoiceStage
+                        channel={channel}
+                        onShare={() => setPicker(true)}
+                        pickerOpen={picker}
+                        actions={
+                          chatChannel && (
+                            <IconButton
+                              icon={MessageSquare}
+                              label={voiceChat ? t("Hide chat") : t("Show chat")}
+                              onClick={toggleVoiceChat}
+                              active={voiceChat}
+                              size={18}
+                              className={voiceChat ? "size-10 rounded-xl text-accent-soft" : "size-10 rounded-xl bg-panel"}
+                            />
+                          )
+                        }
+                      />
+                      {voiceChat && chatChannel && <TextChannel channel={chatChannel} panel onClose={toggleVoiceChat} />}
+                    </>
+                  )}
+                </div>
               </main>
             ) : (
               saved && <OfflineServer server={saved} onLive={() => undefined} />
