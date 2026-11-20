@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useSession } from "../lib/session";
 import { useSettings } from "../lib/settings";
+import { useWatching } from "../lib/watching";
 
 /** Plays every remote voice and stream-audio track with per-user volume/mute, deafen and the chosen output device. */
 export function RemoteAudio() {
   const s = useSession();
   const st = useSettings();
+  const watched = useWatching(); // stream audio only plays for shares you clicked "Watch stream" on
   return (
     <>
       {Object.entries(s.remote).flatMap(([id, r]) => {
@@ -14,7 +16,7 @@ export function RemoteAudio() {
         const off = s.local.deafened || peer.muted;
         return [
           r.mic && <Player key={`${id}-mic`} stream={r.mic} muted={off} volume={peer.volume} sink={st.outputDevice} />,
-          r.screenAudio && <Player key={`${id}-sa`} stream={r.screenAudio} muted={off} volume={peer.streamVolume} sink={st.outputDevice} />,
+          r.screenAudio && <Player key={`${id}-sa`} stream={r.screenAudio} muted={off || !watched.has(id)} volume={peer.streamVolume} sink={st.outputDevice} />,
         ].filter(Boolean);
       })}
     </>

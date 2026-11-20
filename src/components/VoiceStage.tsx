@@ -1,4 +1,4 @@
-import { Headphones, HeadphoneOff, Maximize, Mic, MicOff, Minimize, MonitorUp, MonitorX, PhoneOff, Video, VideoOff, Volume2 } from "lucide-react";
+import { Eye, EyeOff, Headphones, HeadphoneOff, Maximize, Mic, MicOff, Minimize, MonitorUp, MonitorX, PhoneOff, Video, VideoOff, Volume2 } from "lucide-react";
 import { t } from "../lib/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Channel } from "../../shared/protocol";
@@ -8,6 +8,7 @@ import { MemberMenu, type MenuTarget, type TileActions } from "./MemberMenu";
 import { PopOut } from "./PopOut";
 import { useFullscreen } from "../lib/useFullscreen";
 import { useIdle } from "../lib/useIdle";
+import { useWatching, watching } from "../lib/watching";
 import { Avatar, Button, cx } from "./ui";
 
 const IDLE_MS = 3_000;
@@ -95,6 +96,12 @@ export function VoiceStage({ channel, onShare, pickerOpen, actions }: { channel:
     setPopped((p) => (p.every((k) => tiles.some((t) => t.key === k)) ? p : p.filter((k) => tiles.some((t) => t.key === k))));
   }, [tiles]);
 
+  const watched = useWatching();
+  const sharers = tiles.filter((t) => t.kind === "screen" && !t.self).map((t) => t.memberId).join();
+  useEffect(() => {
+    watching.keepOnly(inCall ? sharers.split(",").filter(Boolean) : []);
+  }, [sharers, inCall]);
+
   const [menuTile, setMenuTile] = useState<Tile | null>(null);
   const openMenu = (t: Tile) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -129,6 +136,7 @@ export function VoiceStage({ channel, onShare, pickerOpen, actions }: { channel:
   }, [fullscreen, inCall]);
 
   const watch = (t: Tile) => {
+    if (t.kind === "screen" && !t.self) watching.start(t.memberId); // clicking is the opt-in: image and sound come on
     setFocus(t.key);
     if (t.kind === "screen" || t.stream) fullscreen.enter(); // user gesture: allowed to go fullscreen
   };
@@ -269,7 +277,8 @@ export function VoiceStage({ channel, onShare, pickerOpen, actions }: { channel:
 
   function tile(t: Tile) {
     const m = s.members[t.memberId];
-    return { ...t, name: m?.name ?? "?", hue: m?.hue ?? 0, avatar: m?.avatar ?? null, banner: m?.banner ?? null, muted: !!m?.state.muted, speaking: !!s.speaking[t.memberId] && !m?.state.muted };
+    const blocked = t.kind === "screen" && !t.self && !watched.has(t.memberId);
+    return { ...t, name: m?.name ?? "?", hue: m?.hue ?? 0, avatar: m?.avatar ?? null, banner: m?.banner ?? null, muted: !!m?.state.muted, speaking: !!s.speaking[t.memberId] && !m?.state.muted, blocked };
   }
 }
 
@@ -283,7 +292,7 @@ function TileView({
   onClick,
   onContextMenu,
 }: {
-  tile: Tile & { name: string; hue: number; avatar: string | null; banner: string | null; muted: boolean; speaking: boolean };
+  tile: Tile & { name: string; hue: number; avatar: string | null; banner: string | null; muted: boolean; speaking: boolean; blocked: boolean };
   big?: boolean;
   fullscreen?: boolean;
   idle: boolean;
@@ -310,7 +319,9 @@ function TileView({
       {/* speaking outline: a layer above the video, so a camera doesn't cover it */}
       {tile.speaking && !isScreen && <span className={cx("pointer-events-none absolute inset-0 z-10 border-2 border-accent", fullscreen ? "rounded-none" : "rounded-[18px]")} />}
       {tile.stream ? (
-        <VideoView stream={tile.stream} mirror={tile.self && !isScreen} contain={isScreen || big} />
+        <div className={cx("h-full w-full transition-[filter,transform] duration-300", tile.blocked && "scale-110 blur-xl brightness-75")}>
+          <VideoView stream={tile.stream} mirror={tile.self && !isScreen} contain={(isScreen || big) && !tile.blocked} />
+        </div>
       ) : isScreen ? (
         <span className="text-sm text-muted">{t("Connecting to stream…")}</span>
       ) : (
@@ -321,8 +332,25 @@ function TileView({
         {tile.muted && !isScreen && <MicOff size={13} className="text-red" />}
         <span>{isScreen ? t("{name}'s screen", { name: tile.name }) : tile.name}</span>
       </Label>
-      {isScreen && !big && (
-        <span className="absolute inset-0 flex items-center justify-center bg-void/40 text-sm font-semibold opacity-0 transition-opacity group-hover:opacity-100">{t("Watch stream")}</span>
+      {isScreen && tile.blocked && (
+        <span className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-void/35">
+          <span className="flex items-center gap-2 rounded-full bg-gradient-to-br from-accent-soft to-accent px-5 py-2.5 text-sm font-semibold text-canvas shadow-lg transition-transform group-hover:scale-105">
+            <Eye size={17} /> {t("Watch stream")}
+          </span>
+          {big && <span className="text-xs text-fg2">{t("Image and sound start when you watch")}</span>}
+        </span>
+      )}
+      {isScreen && !tile.self && !tile.blocked && (
+        <button
+          title={t("Stop watching")}
+          onClick={(e) => {
+            e.stopPropagation();
+            watching.stop(tile.memberId);
+          }}
+          className={cx("absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-full bg-canvas/70 px-3 py-1.5 text-xs font-semibold text-fg backdrop-blur-md transition-opacity hover:bg-red/80 hover:text-light", idle ? "opacity-0" : "opacity-0 group-hover:opacity-100")}
+        >
+          <EyeOff size={14} /> {t("Stop watching")}
+        </button>
       )}
     </div>
   );
@@ -334,7 +362,7 @@ function PopTile({ tile }: { tile: Parameters<typeof TileView>[0]["tile"] }) {
   const idle = useIdle(box, IDLE_MS, true);
   return (
     <div ref={box} className={cx("h-full w-full", idle && "cursor-none [&_*]:cursor-none")}>
-      <TileView tile={tile} big fullscreen idle={idle} onClick={() => undefined} onContextMenu={(e) => e.preventDefault()} />
+      <TileView tile={tile} big fullscreen idle={idle} onClick={() => tile.blocked && watching.start(tile.memberId)} onContextMenu={(e) => e.preventDefault()} />
     </div>
   );
 }

@@ -269,4 +269,6 @@ export const ptBR: Record<string, string> = {
   "Show members": "Mostrar membros",
   "Hide chat": "Esconder chat",
   "Show chat": "Mostrar chat",
+  "Stop watching": "Parar de assistir",
+  "Image and sound start when you watch": "Imagem e som começam quando você assistir",
 };
