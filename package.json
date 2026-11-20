@@ -1,7 +1,7 @@
 {
   "name": "talkas",
   "productName": "Talkas",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Self-hosted, offline-first P2P voice, video and screen sharing with a Discord-like UI.",
   "main": "dist-electron/electron/main.js",
   "scripts": {
